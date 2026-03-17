@@ -1,0 +1,135 @@
+import { Page, Locator, expect } from '@playwright/test';
+
+export class DashboardPage {
+    readonly page: Page;
+    readonly closePopupButton: Locator;
+    readonly shipmentText: Locator;
+    readonly searchInput: Locator;
+    readonly searchButton: Locator;
+    readonly firstRowMenu: Locator;
+    readonly createShipmentOption: Locator;
+    readonly ordersTab: Locator;
+    readonly ordersInProcessButton: Locator;
+
+    constructor(page: Page) {
+        this.page = page;
+        this.closePopupButton = page.locator("//em[@class='bi bi-x']");
+        this.shipmentText = page.getByText('Shipment', { exact: true });
+        this.searchInput = page.getByPlaceholder(/Search by Order Number, ARC No\./i);
+        this.searchButton = page.getByTitle('Click to Search', { exact: true });
+        this.firstRowMenu = page.locator('em.bi.bi-three-dots.pointer.secondary-font').first();
+        this.createShipmentOption = page.locator('.popover-body').getByText('Create Shipment');
+        this.ordersTab = page.getByText('Orders', { exact: true });
+        this.ordersInProcessButton = page.getByRole('button', { name: /Orders In Process/i });
+    }
+
+    async handlePostLoginSetup() {
+        console.log('Handling popups...');
+        await this.page.waitForLoadState('load');
+
+        // Popup 1
+        try {
+            const popup = this.closePopupButton.first();
+            await popup.waitFor({ state: 'visible', timeout: 5000 });
+            await popup.click();
+            await popup.waitFor({ state: 'hidden', timeout: 2000 });
+        } catch (e) {
+            console.log('First popup not found or already closed');
+        }
+
+        // Popup 2
+        try {
+            const popup = this.closePopupButton.first();
+            await popup.waitFor({ state: 'visible', timeout: 3000 });
+            await popup.click();
+            await popup.waitFor({ state: 'hidden', timeout: 2000 });
+        } catch (e) {
+            console.log('Second popup not found');
+        }
+
+
+        // Wait a bit for any overlays to clear
+        await this.page.waitForTimeout(1000);
+
+        // Verify the URL after closing popups
+        await expect(this.page).toHaveURL('https://supplierfirst.ril.com/homepage/dashboard/orders/new-orders');
+    }
+
+    async searchForOrder(orderNo: string) {
+        const trimmedOrderNo = orderNo.trim();
+        // Click on the Orders tab
+        console.log('Clicking on Orders tab...');
+        await this.ordersTab.waitFor({ state: 'visible', timeout: 10000 });
+        await this.ordersTab.click({ force: true });
+
+        // Wait for the side menu/tab content to update
+        await this.page.waitForTimeout(2000);
+
+        // Click on "Orders In Process" button
+        console.log('Waiting for "Orders In Process" button to be visible and enabled...');
+        await this.ordersInProcessButton.waitFor({ state: 'visible', timeout: 15000 });
+
+        // Double check if it's already active/selected by checking class or state if possible, 
+        // but for now, just ensure it's clicked.
+        console.log('Clicking on "Orders In Process" button...');
+        await this.ordersInProcessButton.scrollIntoViewIfNeeded();
+        await this.ordersInProcessButton.click();
+
+        // Wait for the table/view to load after clicking the button
+        await this.page.waitForTimeout(2000);
+
+        // Wait for the page to be ready for search
+        await expect(this.shipmentText).toBeVisible({ timeout: 15000 });
+
+        // Perform search
+        await this.searchInput.clear();
+        await this.searchInput.fill(trimmedOrderNo);
+        await this.page.waitForTimeout(1000);
+
+        // Press Enter as specified by user
+        console.log(`Pressing Enter to search for Order: ${trimmedOrderNo}...`);
+        await this.searchInput.press('Enter');
+
+        // Wait for search results and sorting
+        console.log('Waiting for search results to stabilize (5 seconds)...');
+        await this.page.waitForLoadState('networkidle');
+        await this.page.waitForTimeout(5000); // 5 seconds wait as requested
+
+        // Verify exactly one order-card is visible
+        console.log('Verifying order-card count...');
+        const orderCards = this.page.locator('order-card:visible');
+        const count = await orderCards.count();
+
+        if (count === 1) {
+            console.log('Successfully found exactly one visible order-card.');
+        } else {
+            console.error(`ERROR: Expected 1 visible order-card, but found ${count}.`);
+            if (count === 0) {
+                const isNoData = await this.page.getByText('No Data Found...', { exact: false }).isVisible();
+                if (isNoData) console.log('Site explicitly shows "No Data Found...".');
+            }
+            throw new Error(`Order search failed: expected 1 result, found ${count}.`);
+        }
+    }
+
+    async openShipmentMenu() {
+        console.log('Opening shipment menu from order-card...');
+        // Correct selector from actual DOM: em.bi.bi-three-dots.pointer.secondary-font
+        const menuIcon = this.page.locator('order-card:visible').locator('em.bi.bi-three-dots.pointer.secondary-font').first();
+
+        await expect(menuIcon).toBeVisible({ timeout: 10000 });
+        await menuIcon.scrollIntoViewIfNeeded();
+        await menuIcon.click();
+        console.log('Successfully clicked the menu dots.');
+    }
+
+    async selectCreateShipment() {
+        // Scope to visible popover to avoid strict mode errors with multiple rows
+        const visibleOption = this.createShipmentOption.filter({ visible: true });
+        await expect(visibleOption).toBeVisible({ timeout: 5000 });
+        await visibleOption.hover();
+        await this.page.waitForTimeout(500);
+        await visibleOption.click();
+        console.log('Clicked "Create Shipment" successfully.');
+    }
+}

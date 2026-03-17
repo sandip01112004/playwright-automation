@@ -2,11 +2,16 @@ import { test as base, Page, expect } from '@playwright/test';
 export { expect };
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { DashboardPage } from '../pages/DashboardPage';
 
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-export const test = base.extend({
+type MyFixtures = {
+    dashboardPage: DashboardPage;
+};
+
+export const test = base.extend<MyFixtures>({
     page: async ({ browser }, use) => {
 
         if (!process.env.AUTH_TOKEN ||
@@ -65,6 +70,9 @@ export const test = base.extend({
 
         // Cleanup context after test
         await context.close();
+    },
+    dashboardPage: async ({ page }, use) => {
+        await use(new DashboardPage(page));
     },
 });
 
