@@ -20,15 +20,23 @@ export class DashboardPage {
     }
 
     async handlePostLoginSetup() {
-        console.log('Handling popups...');
+        console.log('Waiting for dashboard to fully load...');
+
+        // Step 1: Wait for HTML to load
         await this.page.waitForLoadState('load');
 
-        // Popup 1
+        // Step 2: Wait for all API/data calls to finish (production-style smart wait)
+        await this.page.waitForLoadState('networkidle');
+
+        console.log('Dashboard loaded. Handling popups...');
+
+        // Popup 1 — longer timeout since page content loads slowly
         try {
             const popup = this.closePopupButton.first();
-            await popup.waitFor({ state: 'visible', timeout: 5000 });
+            await popup.waitFor({ state: 'visible' });
             await popup.click();
-            await popup.waitFor({ state: 'hidden', timeout: 2000 });
+            await popup.waitFor({ state: 'hidden' });
+            console.log('First popup closed.');
         } catch (e) {
             console.log('First popup not found or already closed');
         }
@@ -36,14 +44,17 @@ export class DashboardPage {
         // Popup 2
         try {
             const popup = this.closePopupButton.first();
-            await popup.waitFor({ state: 'visible', timeout: 3000 });
+            await popup.waitFor({ state: 'visible' });
             await popup.click();
-            await popup.waitFor({ state: 'hidden', timeout: 2000 });
+            await popup.waitFor({ state: 'hidden' });
+            console.log('Second popup closed.');
         } catch (e) {
             console.log('Second popup not found or already closed');
         }
-        // Verify the URL after closing popups
-        await expect(this.page).toHaveURL('https://supplierfirst.ril.com/homepage/dashboard/orders/new-orders');
+
+        // Wait until the dashboard URL is reached
+        await this.page.waitForURL('https://supplierfirst.ril.com/homepage/dashboard/orders/new-orders');
+        console.log('Dashboard ready ✓');
     }
 
     async searchForOrder(orderNo: string) {

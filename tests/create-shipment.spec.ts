@@ -1,18 +1,9 @@
 import { test, expect } from '../fixtures/auth.fixture';
-import * as readline from 'readline';
+import * as readlineSync from 'readline-sync';
 
 // Helper: Prompt the user in the terminal to enter the Order Number
-function promptOrderNo(): Promise<string> {
-    return new Promise((resolve) => {
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout,
-        });
-        rl.question('\nEnter Order Number: ', (answer) => {
-            rl.close();
-            resolve(answer.trim());
-        });
-    });
+function promptOrderNo(): string {
+    return readlineSync.question('\nEnter Order Number: ').trim();
 }
 
 test.beforeEach(async ({ dashboardPage }) => {
@@ -21,9 +12,9 @@ test.beforeEach(async ({ dashboardPage }) => {
 });
 
 test('Create Shipment with Parameterized Order Number', async ({ dashboardPage }) => {
-    // Use ORDER_NO env variable if provided, otherwise prompt in terminal
+    // Use ORDER_NO env variable if provided, otherwise prompt interactively in terminal
     // Run with: ORDER_NO=your_order_no npx playwright test tests/create-shipment.spec.ts --headed
-    const orderNo = process.env.ORDER_NO || await promptOrderNo();
+    const orderNo = process.env.ORDER_NO || promptOrderNo();
 
     if (!orderNo) {
         throw new Error('No Order Number provided. Either set ORDER_NO env variable or enter it when prompted.');

@@ -28,7 +28,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   /* Global expect timeout for all assertions like toBeVisible(), toHaveURL() etc. */
   expect: {
-    timeout: 15000, // 15 seconds
+    timeout: 30000, // 15 seconds
   },
 
   use: {
@@ -41,7 +41,7 @@ export default defineConfig({
     // headless: false,
     screenshot: 'only-on-failure',
     /* Global timeout for all actions like click(), fill(), press() etc. */
-    actionTimeout: 15000, // 15 seconds
+    actionTimeout: 30000, // 15 seconds
   },
 
   /* Configure projects for major browsers */
