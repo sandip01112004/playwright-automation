@@ -26,6 +26,11 @@ export default defineConfig({
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: 'html',
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
+  /* Global expect timeout for all assertions like toBeVisible(), toHaveURL() etc. */
+  expect: {
+    timeout: 15000, // 15 seconds
+  },
+
   use: {
     /* Base URL to use in actions like `await page.goto('')`. */
     // baseURL: 'http://localhost:3000',
@@ -35,6 +40,8 @@ export default defineConfig({
     browserName: 'chromium',
     // headless: false,
     screenshot: 'only-on-failure',
+    /* Global timeout for all actions like click(), fill(), press() etc. */
+    actionTimeout: 15000, // 15 seconds
   },
 
   /* Configure projects for major browsers */
