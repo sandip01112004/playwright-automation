@@ -14,7 +14,7 @@ export class DashboardPage {
         this.page = page;
         this.closePopupButton = page.locator("//em[@class='bi bi-x']");
         this.ordersTab = page.getByText('Orders', { exact: true });
-        this.ordersInProcessButton = page.locator("//button[@id='buttonID1']");
+        this.ordersInProcessButton = page.getByRole('button', { name: /Orders In Process/i });
         this.searchInput = page.getByRole('textbox', { name: 'Search by Order Number, ARC No.' });
         this.menuIcon = page.locator('order-card:visible').locator('em.bi.bi-three-dots.pointer.secondary-font');
         this.createShipmentOption = page.locator('.popover-body').getByText('Create Shipment');
@@ -42,11 +42,11 @@ export class DashboardPage {
 
     async navigateToOrdersInProcess() {
         await this.ordersTab.waitFor({ state: 'visible' });
-        await this.ordersTab.click({ force: true });
+        await this.ordersTab.click();
 
         await this.ordersInProcessButton.scrollIntoViewIfNeeded();
         await this.ordersInProcessButton.waitFor({ state: 'visible' });
-        await this.ordersInProcessButton.click({ force: true });
+        await this.ordersInProcessButton.click();
 
         console.log('Orders In Process view ready ✓');
     }
