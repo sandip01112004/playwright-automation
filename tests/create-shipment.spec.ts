@@ -26,8 +26,8 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ dashboardPage,
     let downloadedFilePath: string;
 
     await test.step('Step 1: Find Order by Order ID', async () => {
-        const orderNo = promptOrderNo();
         await dashboardPage.navigateToOrdersInProcess();
+        const orderNo = promptOrderNo();
         await dashboardPage.performSearch(orderNo);
     });
 

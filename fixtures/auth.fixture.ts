@@ -29,11 +29,11 @@ export const test = base.extend<MyFixtures>({
         const baseUrl = `https://${process.env.DOMAIN_NAME}`;
 
         // Inject zoom on every page navigation via addInitScript
-        await page.addInitScript(() => {
-            window.addEventListener('DOMContentLoaded', () => {
-                document.body.style.zoom = "70%";
-            });
-        });
+        // await page.addInitScript(() => {
+        //     window.addEventListener('DOMContentLoaded', () => {
+        //         document.body.style.zoom = "70%";
+        //     });
+        // });
 
         // Step 1: Navigate to the site (storage is domain-specific)
         await page.goto(baseUrl);
