@@ -1,35 +1,70 @@
 import { test, expect } from '../fixtures/auth.fixture';
+import { ExternalApiService } from '../utils/external-api';
 import * as readlineSync from 'readline-sync';
 
-// Helper: Prompt the user in the terminal to enter the Order Number
 function promptOrderNo(): string {
-    return readlineSync.question('\nEnter Order Number: ').trim();
+    return readlineSync.question('\nEnter Order Number to Search: ').trim();
 }
 
 test.beforeEach(async ({ dashboardPage }) => {
-    // Handle post-login setup (close popups, verify dashboard URL)
     await dashboardPage.handlePostLoginSetup();
 });
 
-test('Create Shipment with Parameterized Order Number', async ({ dashboardPage }) => {
-    // Use ORDER_NO env variable if provided, otherwise prompt interactively in terminal
-    // Run with: ORDER_NO=your_order_no npx playwright test tests/create-shipment.spec.ts --headed
-    const orderNo = process.env.ORDER_NO || promptOrderNo();
+interface InvoiceData {
+    invoiceNumber: string;
+    date: string;
+    amount: number | string;
+    url: string;
+}
 
-    if (!orderNo) {
-        throw new Error('No Order Number provided. Either set ORDER_NO env variable or enter it when prompted.');
-    }
+test('Full Shipment Creation: API Data + UI Automation', async ({ dashboardPage, shipmentFormPage }) => {
+    const apiService = new ExternalApiService();
+    const testDeliveryId = process.env.DELIVERY_ID!;
+    console.log(`\n--- Starting Automation | DeliveryID: ${testDeliveryId} ---`);
 
-    console.log(`\nStarting shipment creation for Order Number: ${orderNo}`);
+    let invoiceData: InvoiceData;
+    let downloadedFilePath: string;
 
-    // Step 1: Search for the Order Number (includes clicking Orders tab)
-    await dashboardPage.searchForOrder(orderNo);
+    await test.step('Step 1: Find Order by Order ID', async () => {
+        const orderNo = promptOrderNo();
+        await dashboardPage.navigateToOrdersInProcess();
+        await dashboardPage.performSearch(orderNo);
+    });
 
-    // Step 2: Open the shipment menu for the first row
-    await dashboardPage.openShipmentMenu();
+    await test.step('Step 2: Create Shipment and Complete Form', async () => {
+        await dashboardPage.openShipmentMenu();
+        await dashboardPage.selectCreateShipment();
 
-    // Step 3: Select "Create Shipment"
-    await dashboardPage.selectCreateShipment();
+        // Fetch data and download files after the click
+        console.log('Fetching API data and downloading files...');
+        let deliveryData;
+        try {
+            [invoiceData, deliveryData] = await Promise.all([
+                apiService.getInvoiceDetails(testDeliveryId),
+                apiService.getDeliveryDetails(testDeliveryId)
+            ]);
+        } catch (error) {
+            console.error('Failed to fetch API data:', error instanceof Error ? error.message : error);
+            test.skip(true, 'External API unavailable');
+            return;
+        }
 
-    console.log('Successfully reached the Create Shipment step.');
+        const invoiceFileName = new URL(invoiceData.url).pathname.split('/').pop() || 'invoice.pdf';
+        const deliveryFileName = deliveryData.displayFileName || (new URL(deliveryData.url).pathname.split('/').pop()) || 'delivery.pdf';
+
+        const [invoicePath, deliveryPath] = await Promise.all([
+            apiService.downloadFile(invoiceData.url, invoiceFileName),
+            apiService.downloadFile(deliveryData.url, deliveryFileName)
+        ]);
+
+        await shipmentFormPage.uploadInvoiceCopy(invoicePath);
+        await shipmentFormPage.fillInvoiceDetails({
+            invoiceNumber: invoiceData.invoiceNumber,
+            date: invoiceData.date,
+            amount: invoiceData.amount,
+            deliveryDetailsPath: deliveryPath
+        });
+    });
+
+    console.log('\n--- Automation completed successfully ✓ ---');
 });

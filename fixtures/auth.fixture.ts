@@ -3,12 +3,14 @@ export { expect };
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { DashboardPage } from '../pages/DashboardPage';
+import { ShipmentFormPage } from '../pages/ShipmentFormPage';
 
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 type MyFixtures = {
     dashboardPage: DashboardPage;
+    shipmentFormPage: ShipmentFormPage;
 };
 
 export const test = base.extend<MyFixtures>({
@@ -26,7 +28,7 @@ export const test = base.extend<MyFixtures>({
         const page = await context.newPage();
         const baseUrl = `https://${process.env.DOMAIN_NAME}`;
 
-        // Use addInitScript to automatically run on every new page navigation
+        // Inject zoom on every page navigation via addInitScript
         await page.addInitScript(() => {
             window.addEventListener('DOMContentLoaded', () => {
                 document.body.style.zoom = "70%";
@@ -59,20 +61,15 @@ export const test = base.extend<MyFixtures>({
         await page.reload();
         await page.waitForLoadState('networkidle');
 
-        // Apply zoom immediately in the current page in case it's already loaded
-        await page.evaluate(() => {
-            if (document.body) {
-                document.body.style.zoom = "70%";
-            }
-        });
-
         await use(page);
 
-        // Cleanup context after test
         await context.close();
     },
     dashboardPage: async ({ page }, use) => {
         await use(new DashboardPage(page));
+    },
+    shipmentFormPage: async ({ page }, use) => {
+        await use(new ShipmentFormPage(page));
     },
 });
 
