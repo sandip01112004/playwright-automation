@@ -26,8 +26,6 @@ export class ExternalApiService {
 
         const context: APIRequestContext = await request.newContext();
 
-        console.log(`Fetching data from: ${this.baseUrl}${endpoint}`);
-
         const response = await context.get(`${this.baseUrl}${endpoint}`, {
             headers: {
                 'Authorization': `Bearer ${this.token}`,
@@ -76,7 +74,7 @@ export class ExternalApiService {
      */
     async getDeliveryDetails(deliveryId: string) {
         // Construct the specific URL for delivery details
-        const endpoint = `/delivery/${deliveryId}?fields=delivery_media,delivery_id,quantity&delivery_media__measured_at=3871`;
+        const endpoint = `/delivery/${deliveryId}?fields=delivery_media,delivery_id,quantity&delivery_media__measured_at=3870`;
 
         const response = await this.fetchData(endpoint);
 
@@ -122,7 +120,6 @@ export class ExternalApiService {
 
         const buffer = await response.body();
         fs.writeFileSync(filePath, buffer);
-        console.log(`File saved successfully: ${fileName}`);
 
         return filePath;
     }

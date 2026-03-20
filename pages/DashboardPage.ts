@@ -20,25 +20,32 @@ export class DashboardPage {
         this.createShipmentOption = page.locator('.popover-body').getByText('Create Shipment');
     }
 
+    /**
+     * Handles post-login setup by waiting for the page to load and dismissing common popups.
+     */
     async handlePostLoginSetup() {
         await this.page.waitForLoadState('load');
         await this.page.waitForLoadState('networkidle');
 
-        // Dismiss up to 2 popups
+        // Dismiss up to 2 initial popups if they appear
         for (let i = 0; i < 2; i++) {
             try {
                 const popup = this.closePopupButton.first();
-                await popup.waitFor({ state: 'visible' });
-                await popup.click();
-                await popup.waitFor({ state: 'hidden' });
+                if (await popup.isVisible({ timeout: 5000 })) {
+                    await popup.click();
+                    await popup.waitFor({ state: 'hidden' });
+                }
             } catch {
                 break;
             }
         }
 
-        await this.page.waitForURL('https://supplierfirst.ril.com/homepage/dashboard/orders/new-orders');
+        await this.page.waitForURL('**/orders/new-orders');
     }
 
+    /**
+     * Navigates to the "Orders In Process" section.
+     */
     async navigateToOrdersInProcess() {
         await this.ordersTab.waitFor({ state: 'visible' });
         await this.ordersTab.click();
@@ -46,10 +53,12 @@ export class DashboardPage {
         await this.ordersInProcessButton.scrollIntoViewIfNeeded();
         await this.ordersInProcessButton.waitFor({ state: 'visible' });
         await this.ordersInProcessButton.click();
-
-        console.log('Orders In Process view ready ✓');
     }
 
+    /**
+     * Performs a search using an Order Number.
+     * @param orderNo - The order number to search for.
+     */
     async performSearch(orderNo: string) {
         const trimmedOrderNo = orderNo.trim();
         await this.searchInput.waitFor({ state: 'visible' });
@@ -64,7 +73,7 @@ export class DashboardPage {
         const count = await orderCards.count();
 
         if (count === 1) {
-            console.log(`Order "${trimmedOrderNo}" found ✓`);
+            console.log(`Order "${trimmedOrderNo}" found`);
         } else {
             if (count === 0) {
                 const isNoData = await this.page.getByText('No Data Found...', { exact: false }).isVisible();
@@ -74,12 +83,18 @@ export class DashboardPage {
         }
     }
 
+    /**
+     * Opens the action menu for the first visible order.
+     */
     async openShipmentMenu() {
         const menuIcon = this.menuIcon.first();
         await expect(menuIcon).toBeVisible();
         await menuIcon.click();
     }
 
+    /**
+     * Selects the "Create Shipment" option from the menu and waits for the form to load.
+     */
     async selectCreateShipment() {
         const visibleOption = this.createShipmentOption.filter({ visible: true });
         await visibleOption.hover();
@@ -88,7 +103,5 @@ export class DashboardPage {
             this.page.waitForURL('**/asn/asnform'),
             visibleOption.click()
         ]);
-
-        console.log('Navigated to ASN Form ✓');
     }
 }

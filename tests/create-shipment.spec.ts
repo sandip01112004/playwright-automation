@@ -30,8 +30,6 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
     const dashboardPage = new DashboardPage(page);
     const shipmentFormPage = new ShipmentFormPage(page);
     const apiService = new ExternalApiService();
-    // Delivery ID prompt will happen when needed in Step 2
-    console.log(`\n--- Starting Automation ---`);
 
     let invoiceData: InvoiceData;
     let downloadedFilePath: string;
@@ -40,7 +38,6 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
     const docsDir = path.resolve(process.cwd(), 'docs');
     if (fs.existsSync(docsDir)) {
         fs.readdirSync(docsDir).forEach(file => fs.unlinkSync(path.join(docsDir, file)));
-        console.log('--- Cleaned docs folder ---');
     }
 
     await test.step('Step 1: Find Order by Order ID', async () => {
@@ -55,7 +52,6 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
 
         // Fetch data and download files after the click
         const testDeliveryId = promptDeliveryId();
-        console.log(`\n--- Using DeliveryID: ${testDeliveryId} ---`);
         let deliveryData;
         try {
             [invoiceData, deliveryData] = await Promise.all([
@@ -76,16 +72,14 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
             apiService.downloadFile(deliveryData.url, deliveryFileName)
         ]);
 
-        await shipmentFormPage.uploadInvoiceCopy(invoicePath);
-        await shipmentFormPage.fillInvoiceDetails({
+        await shipmentFormPage.completeShipmentForm({
+            invoicePath: invoicePath,
             invoiceNumber: invoiceData.invoiceNumber,
             date: invoiceData.date,
             amount: invoiceData.amount,
             deliveryDetailsPath: deliveryPath,
             quantityMt: deliveryData.quantityMt
         });
-
-        await shipmentFormPage.fillTransportDetails();
     });
 
     console.log('\n--- Automation completed successfully ✓ ---');
