@@ -7,7 +7,32 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 function promptOrderNo(): string {
+    const envVal = process.env.ORDER_NO;
+    if (envVal) return envVal.trim();
     return readlineSync.question('\nEnter Order Number to Search: ').trim();
+}
+
+async function promptDeliveryIdRemote(): Promise<string> {
+    const envVal = process.env.DELIVERY_ID;
+    if (envVal) return envVal.trim();
+
+    console.log('\n[SYNC] Requesting Delivery ID from Remote Dashboard...');
+
+    // Notify server we need input
+    await fetch('http://localhost:5000/request-input/DELIVERY_ID').catch(() => { });
+
+    // Poll until received
+    while (true) {
+        const res = await fetch('http://localhost:5000/get-input/DELIVERY_ID').catch(() => null);
+        if (res) {
+            const data = await res.json();
+            if (data.value) {
+                console.log(`[SYNC] Received Delivery ID: ${data.value}`);
+                return data.value;
+            }
+        }
+        await new Promise(resolve => setTimeout(resolve, 3000));
+    }
 }
 
 function promptDeliveryId(): string {
@@ -51,7 +76,7 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
         await dashboardPage.selectCreateShipment();
 
         // Fetch data and download files after the click
-        const testDeliveryId = promptDeliveryId();
+        const testDeliveryId = await promptDeliveryIdRemote();
         let deliveryData;
         try {
             [invoiceData, deliveryData] = await Promise.all([

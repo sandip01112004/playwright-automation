@@ -27,20 +27,19 @@ export class DashboardPage {
         await this.page.waitForLoadState('load');
         await this.page.waitForLoadState('networkidle');
 
-        // Dismiss up to 2 initial popups if they appear
+        // Dismiss up to 2 popups
         for (let i = 0; i < 2; i++) {
             try {
                 const popup = this.closePopupButton.first();
-                if (await popup.isVisible({ timeout: 5000 })) {
-                    await popup.click();
-                    await popup.waitFor({ state: 'hidden' });
-                }
+                await popup.waitFor({ state: 'visible' });
+                await popup.click();
+                await popup.waitFor({ state: 'hidden' });
             } catch {
                 break;
             }
         }
 
-        await this.page.waitForURL('**/orders/new-orders');
+        await this.page.waitForURL('https://supplierfirst.ril.com/homepage/dashboard/orders/new-orders');
     }
 
     /**
