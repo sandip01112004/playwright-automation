@@ -48,14 +48,12 @@ export class ExternalApiService {
      */
     async getInvoiceDetails(deliveryId: string) {
         // Construct the specific URL with the delivery ID and required fields
-        const endpoint = `/invoice?invoice_cashflow__delivery=${deliveryId}&fields=invoice_number,presigned_url,type,created_at&type=22`;
+        const endpoint = `/invoice?invoice_cashflow__delivery=${deliveryId}&fields=invoice_number,presigned_url,type,created_at&type=22&cashflow_category=3860`;
 
         const response = await this.fetchData(endpoint);
 
         if (response.status === 'success' && response.data?.results?.length > 0) {
-            const results = response.data.results;
-            // Pick the 'last one' as requested
-            const latestResult = results[results.length - 1];
+            const latestResult = response.data.results[0];
 
             return {
                 invoiceNumber: latestResult.invoice_number,
