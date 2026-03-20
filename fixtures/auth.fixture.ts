@@ -2,18 +2,9 @@ import { test as base, Page, expect } from '@playwright/test';
 export { expect };
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { DashboardPage } from '../pages/DashboardPage';
-import { ShipmentFormPage } from '../pages/ShipmentFormPage';
-
-// Load environment variables from .env file
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-type MyFixtures = {
-    dashboardPage: DashboardPage;
-    shipmentFormPage: ShipmentFormPage;
-};
-
-export const test = base.extend<MyFixtures>({
+export const test = base.extend({
     page: async ({ browser }, use) => {
 
         if (!process.env.AUTH_TOKEN ||
@@ -64,12 +55,6 @@ export const test = base.extend<MyFixtures>({
         await use(page);
 
         await context.close();
-    },
-    dashboardPage: async ({ page }, use) => {
-        await use(new DashboardPage(page));
-    },
-    shipmentFormPage: async ({ page }, use) => {
-        await use(new ShipmentFormPage(page));
     },
 });
 

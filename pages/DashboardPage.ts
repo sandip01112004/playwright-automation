@@ -37,7 +37,6 @@ export class DashboardPage {
         }
 
         await this.page.waitForURL('https://supplierfirst.ril.com/homepage/dashboard/orders/new-orders');
-        console.log('Dashboard ready ✓');
     }
 
     async navigateToOrdersInProcess() {

@@ -1,12 +1,21 @@
 import { test, expect } from '../fixtures/auth.fixture';
 import { ExternalApiService } from '../utils/external-api';
+import { DashboardPage } from '../pages/DashboardPage';
+import { ShipmentFormPage } from '../pages/ShipmentFormPage';
 import * as readlineSync from 'readline-sync';
+import * as fs from 'fs';
+import * as path from 'path';
 
 function promptOrderNo(): string {
     return readlineSync.question('\nEnter Order Number to Search: ').trim();
 }
 
-test.beforeEach(async ({ dashboardPage }) => {
+function promptDeliveryId(): string {
+    return readlineSync.question('Enter Delivery ID to call APIs: ').trim();
+}
+
+test.beforeEach(async ({ page }) => {
+    const dashboardPage = new DashboardPage(page);
     await dashboardPage.handlePostLoginSetup();
 });
 
@@ -17,13 +26,22 @@ interface InvoiceData {
     url: string;
 }
 
-test('Full Shipment Creation: API Data + UI Automation', async ({ dashboardPage, shipmentFormPage }) => {
+test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
+    const dashboardPage = new DashboardPage(page);
+    const shipmentFormPage = new ShipmentFormPage(page);
     const apiService = new ExternalApiService();
-    const testDeliveryId = process.env.DELIVERY_ID!;
-    console.log(`\n--- Starting Automation | DeliveryID: ${testDeliveryId} ---`);
+    // Delivery ID prompt will happen when needed in Step 2
+    console.log(`\n--- Starting Automation ---`);
 
     let invoiceData: InvoiceData;
     let downloadedFilePath: string;
+
+    // Clear docs folder to ensure we're using fresh files
+    const docsDir = path.resolve(process.cwd(), 'docs');
+    if (fs.existsSync(docsDir)) {
+        fs.readdirSync(docsDir).forEach(file => fs.unlinkSync(path.join(docsDir, file)));
+        console.log('--- Cleaned docs folder ---');
+    }
 
     await test.step('Step 1: Find Order by Order ID', async () => {
         await dashboardPage.navigateToOrdersInProcess();
@@ -36,7 +54,8 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ dashboardPage,
         await dashboardPage.selectCreateShipment();
 
         // Fetch data and download files after the click
-        console.log('Fetching API data and downloading files...');
+        const testDeliveryId = promptDeliveryId();
+        console.log(`\n--- Using DeliveryID: ${testDeliveryId} ---`);
         let deliveryData;
         try {
             [invoiceData, deliveryData] = await Promise.all([
@@ -62,8 +81,11 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ dashboardPage,
             invoiceNumber: invoiceData.invoiceNumber,
             date: invoiceData.date,
             amount: invoiceData.amount,
-            deliveryDetailsPath: deliveryPath
+            deliveryDetailsPath: deliveryPath,
+            quantityMt: deliveryData.quantityMt
         });
+
+        await shipmentFormPage.fillTransportDetails();
     });
 
     console.log('\n--- Automation completed successfully ✓ ---');

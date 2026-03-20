@@ -55,12 +55,15 @@ export class ExternalApiService {
         const response = await this.fetchData(endpoint);
 
         if (response.status === 'success' && response.data?.results?.length > 0) {
-            const firstResult = response.data.results[0];
+            const results = response.data.results;
+            // Pick the 'last one' as requested
+            const latestResult = results[results.length - 1];
+
             return {
-                invoiceNumber: firstResult.invoice_number,
-                date: firstResult.created_at.split('T')[0], // Only the date part
+                invoiceNumber: latestResult.invoice_number,
+                date: latestResult.created_at.split('T')[0], // Only the date part
                 amount: response.data.total_amount,
-                url: firstResult.presigned_url
+                url: latestResult.presigned_url
             };
         }
 
@@ -81,7 +84,7 @@ export class ExternalApiService {
             const quantityKg = parseFloat(response.data.quantity);
             const quantityMt = quantityKg / 1000;
 
-            // Find media where measured_at is 3870
+            // Find media where measured_at is 3871 (consistent with the query parameter)
             const targetMedia = response.data.delivery_media?.find((m: any) => m.measured_at === 3870);
 
             return {
@@ -107,11 +110,9 @@ export class ExternalApiService {
         const absoluteFolderPath = path.resolve(process.cwd(), targetFolder);
         if (!fs.existsSync(absoluteFolderPath)) {
             fs.mkdirSync(absoluteFolderPath, { recursive: true });
-            console.log(`Created directory: ${absoluteFolderPath}`);
         }
 
         const filePath = path.join(absoluteFolderPath, fileName);
-        console.log(`Downloading file to: ${filePath}`);
 
         const response = await context.get(url);
 
