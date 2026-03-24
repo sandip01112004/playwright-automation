@@ -1,5 +1,5 @@
 const express = require('express');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const app = express();
@@ -139,14 +139,24 @@ app.post('/submit-input', (req, res) => {
 });
 
 app.post('/run', (req, res) => {
-    console.log(`\nRunning test remotely...`);
+    console.log(`\n--- [Remote Dashboard] Starting Test Run ---`);
 
-    const cmd = `RUN_MODE=remote npx playwright test tests/create-shipment.spec.ts --headed`;
+    const isHeadless = process.env.HEADLESS !== 'false';
+    const args = ['playwright', 'test', 'tests/create-shipment.spec.ts'];
+    if (!isHeadless) args.push('--headed');
 
-    exec(cmd, (error, stdout, stderr) => {
-        console.log(`Test finished.`);
-        if (error) console.log(`Note: Test might have had failures.`);
+    console.log(`Command: npx ${args.join(' ')}`);
+
+    const testProc = spawn('npx', args, {
+        stdio: 'inherit',
+        shell: true,
+        env: { ...process.env, RUN_MODE: 'remote' }
     });
+
+    testProc.on('close', (code) => {
+        console.log(`\n--- [Remote Dashboard] Test Run Finished (Exit Code: ${code}) ---`);
+    });
+
     res.json({ status: 'started' });
 });
 

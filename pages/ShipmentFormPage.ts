@@ -80,7 +80,7 @@ export class ShipmentFormPage {
         await this.uploadInput.waitFor({ state: 'attached', timeout: 30000 });
         await this.uploadInput.setInputFiles(filePath);
 
-        // Dispatch events to ensure UI/framework (Angular/React) detects the change
+        // Dispatch events to ensure UI/framework detects the change
         await this.uploadInput.dispatchEvent('change');
         await this.uploadInput.dispatchEvent('input');
 

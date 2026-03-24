@@ -1,0 +1,11 @@
+.dockerignore
+.env
+.git
+.gitignore
+*.md
+DOCS/
+docs/
+node_modules
+playwright-report
+test-results
+
