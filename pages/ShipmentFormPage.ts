@@ -84,8 +84,6 @@ export class ShipmentFormPage {
         await this.uploadInput.dispatchEvent('change');
         await this.uploadInput.dispatchEvent('input');
 
-        // Wait for potential virus scanning or signature processing
-        await this.page.waitForTimeout(5000);
 
         // Fill fields
         await this.invoiceNumberInput.scrollIntoViewIfNeeded();
@@ -120,7 +118,6 @@ export class ShipmentFormPage {
             await this.deliveryDetailsUploadInput.setInputFiles(deliveryDetailsPath);
             await this.deliveryDetailsUploadInput.dispatchEvent('change');
             await this.deliveryDetailsUploadInput.dispatchEvent('input');
-            await this.page.waitForTimeout(2000);
             await this.documentTypeDropdown.selectOption('OTHERS');
         }
 
@@ -144,9 +141,9 @@ export class ShipmentFormPage {
         await this.doneButton.click();
 
         if (quantityMt !== undefined) {
-            const intQty = Math.round(Number(quantityMt));
+            const qty = Number(quantityMt);
             await this.offeredQtyInput.waitFor({ state: 'visible' });
-            await this.offeredQtyInput.fill(intQty.toString());
+            await this.offeredQtyInput.fill(qty.toString());
         }
 
         // Close Section
@@ -171,7 +168,6 @@ export class ShipmentFormPage {
 
         await this.sameAsInvoiceCheckbox.waitFor({ state: 'visible', timeout: 10000 });
         await this.sameAsInvoiceCheckbox.check();
-        await this.page.waitForTimeout(2000);
     }
 
 
