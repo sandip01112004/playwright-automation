@@ -19,35 +19,42 @@ test('Session Refresh: Login and Capture Tokens', async ({ page }) => {
     await loginPage.enterLoginId(process.env.LOGIN_ID || '');
 
     // Handle OTP selection
-    try {
-        await expect(page).toHaveURL(/.*\/user\/otpSelection/, { timeout: 10000 });
-        await otpSelectionPage.selectChannel('Mobile Number');
-    } catch (e) {
-        console.log('OTP Selection page did not appear or was skipped.');
-    }
+    await expect(page).toHaveURL(/.*\/sendOTP/);
+    await otpSelectionPage.selectChannel('Mobile: +91 94*****329');
+    await expect(page).toHaveURL(/.*\/verifyOTP;type=sms;screen=login/);
 
-    // Wait for manual OTP and navigation to dashboard
-    await otpVerificationPage.waitForManualOTP();
-    await page.waitForURL(/.*\/homepage\/dashboard/, { timeout: 60000 });
-
+    // Handle OTP verification (manual or remote auto-fill)
+    await otpVerificationPage.verify();
     console.log('Successfully reached dashboard. Capturing tokens...');
 
     const tokens = await page.evaluate(() => {
-        const user_info = JSON.parse(localStorage.getItem('user_info') || '{}');
-        let expiry = localStorage.getItem('authTokenExpiry');
+        const authToken = localStorage.getItem('tokenValue') || '';
 
-        if (!expiry) {
-            // Default to 8 hours if no expiry found in storage
-            const eightHoursLater = new Date(Date.now() + 8 * 60 * 60 * 1000);
-            expiry = eightHoursLater.toISOString();
+        // Try both camelCase and snake_case for the key
+        const userDataRaw = localStorage.getItem('userInfo') || localStorage.getItem('user_info') || '{}';
+        const userData = JSON.parse(userDataRaw);
+
+        // Try both camelCase and snake_case for the property
+        const refreshToken = userData.refreshToken || userData.refresh_token || '';
+
+        // Decode expiry directly from the JWT token's payload 
+        let expiry = '';
+        try {
+            const payload = JSON.parse(atob(authToken.split('.')[1]));
+            if (payload.exp) {
+                expiry = new Date(payload.exp * 1000).toISOString();
+            }
+        } catch {
+            expiry = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
         }
 
         return {
-            AUTH_TOKEN: localStorage.getItem('tokenValue') || '',
-            REFRESH_TOKEN: user_info.refreshToken || '',
+            AUTH_TOKEN: authToken,
+            REFRESH_TOKEN: refreshToken,
             TOKEN_EXPIRY: expiry,
         };
     });
+
 
     if (tokens.AUTH_TOKEN) {
         console.log('Tokens captured. Updating .env file...');

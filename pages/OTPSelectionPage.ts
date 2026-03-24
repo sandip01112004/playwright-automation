@@ -10,7 +10,7 @@ export class OTPSelectionPage {
     }
 
     async selectChannel(text: string) {
-        await this.page.getByLabel(text, { exact: true }).click();
+        await this.page.getByText(text, { exact: true }).click();
         await this.continueButton.click();
     }
 }

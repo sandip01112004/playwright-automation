@@ -33,8 +33,6 @@ app.get('/', (req, res) => {
                 <div class="card" id="main-card">
                     <h2>Run Shipment Test</h2>
                     <div id="initial-form">
-                        <label>Order Number:</label>
-                        <input type="text" id="orderNo" placeholder="e.g. SF12345">
                         <button onclick="startTest()">Start Test</button>
                     </div>
                 </div>
@@ -54,16 +52,10 @@ app.get('/', (req, res) => {
                     let currentPrompt = null;
 
                     async function startTest() {
-                        const orderNo = document.getElementById('orderNo').value;
-                        if (!orderNo) return alert('Enter Order Number');
-                        
-                        document.getElementById('status').innerText = 'Test Started! Waiting for prompts...';
-                        document.getElementById('initial-form').classList.add('hidden');
-                        
                         await fetch('/run', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ orderNo })
+                            body: JSON.stringify({ })
                         });
 
                         pollForPrompts();
@@ -88,7 +80,11 @@ app.get('/', (req, res) => {
                     }
 
                     async function submitInput() {
-                        const val = document.getElementById('remoteInput').value;
+                        const val = document.getElementById('remoteInput').value.trim();
+                        if (!val) {
+                            alert('Please enter a value');
+                            return;
+                        }
                         await fetch('/submit-input', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -143,18 +139,17 @@ app.post('/submit-input', (req, res) => {
 });
 
 app.post('/run', (req, res) => {
-    const { orderNo } = req.body;
-    console.log(`\n⏳ Running test remotely for Order: ${orderNo}`);
+    console.log(`\nRunning test remotely...`);
 
-    const cmd = `ORDER_NO=${orderNo} npx playwright test tests/create-shipment.spec.ts --headed`;
+    const cmd = `RUN_MODE=remote npx playwright test tests/create-shipment.spec.ts --headed`;
 
     exec(cmd, (error, stdout, stderr) => {
-        console.log(`✅ Test finished.`);
+        console.log(`Test finished.`);
         if (error) console.log(`Note: Test might have had failures.`);
     });
     res.json({ status: 'started' });
 });
 
 app.listen(port, () => {
-    console.log(`\n✅ INTERACTIVE Dashboard running at http://localhost:${port}`);
+    console.log(`\nINTERACTIVE Dashboard running at http://localhost:${port}`);
 });

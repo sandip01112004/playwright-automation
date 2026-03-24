@@ -6,9 +6,36 @@ import * as readlineSync from 'readline-sync';
 import * as fs from 'fs';
 import * as path from 'path';
 
-function promptOrderNo(): string {
+const dashboardUrl = process.env.DASHBOARD_URL || 'http://localhost:5000';
+
+async function promptRemote(name: string): Promise<string> {
+    console.log(`\n[SYNC] Requesting ${name} from Remote Dashboard (${dashboardUrl})...`);
+
+    // Notify server we need input
+    await fetch(`${dashboardUrl}/request-input/${name}`).catch(() => { });
+
+    // Poll until received
+    while (true) {
+        const res = await fetch(`${dashboardUrl}/get-input/${name}`).catch(() => null);
+        if (res) {
+            const data = await res.json();
+            if (data.value) {
+                console.log(`[SYNC] Received ${name}: ${data.value}`);
+                return data.value;
+            }
+        }
+        await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+}
+
+async function promptOrderNo(): Promise<string> {
     const envVal = process.env.ORDER_NO;
     if (envVal) return envVal.trim();
+
+    if (process.env.RUN_MODE === 'remote') {
+        return await promptRemote('ORDER_NO');
+    }
+
     return readlineSync.question('\nEnter Order Number to Search: ').trim();
 }
 
@@ -16,23 +43,11 @@ async function promptDeliveryIdRemote(): Promise<string> {
     const envVal = process.env.DELIVERY_ID;
     if (envVal) return envVal.trim();
 
-    console.log('\n[SYNC] Requesting Delivery ID from Remote Dashboard...');
-
-    // Notify server we need input
-    await fetch('http://localhost:5000/request-input/DELIVERY_ID').catch(() => { });
-
-    // Poll until received
-    while (true) {
-        const res = await fetch('http://localhost:5000/get-input/DELIVERY_ID').catch(() => null);
-        if (res) {
-            const data = await res.json();
-            if (data.value) {
-                console.log(`[SYNC] Received Delivery ID: ${data.value}`);
-                return data.value;
-            }
-        }
-        await new Promise(resolve => setTimeout(resolve, 3000));
+    if (process.env.RUN_MODE === 'remote') {
+        return await promptRemote('DELIVERY_ID');
     }
+
+    return readlineSync.question('Enter Delivery ID to call APIs: ').trim();
 }
 
 function promptDeliveryId(): string {
@@ -67,7 +82,7 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
 
     await test.step('Step 1: Find Order by Order ID', async () => {
         await dashboardPage.navigateToOrdersInProcess();
-        const orderNo = promptOrderNo();
+        const orderNo = await promptOrderNo();
         await dashboardPage.performSearch(orderNo);
     });
 
