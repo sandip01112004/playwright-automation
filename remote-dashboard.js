@@ -85,8 +85,6 @@ app.get('/', (req, res) => {
                             btn.style.opacity = '1';
                             btn.style.cursor = 'pointer';
                         }
-
-                        pollForPrompts();
                     }
 
                     async function pollForPrompts() {
@@ -123,6 +121,9 @@ app.get('/', (req, res) => {
                         document.getElementById('status').innerText = 'Input Sent. Test continuing...';
                         currentPrompt = null;
                     }
+
+                    // Start polling immediately on page load
+                    pollForPrompts();
                 </script>
             </body>
         </html>
@@ -170,8 +171,9 @@ app.post('/run', (req, res) => {
     console.log(`\nRunning test remotely...`);
 
     const cmd = `npx playwright test tests/create-shipment.spec.ts --headed`;
+    const childEnv = { ...process.env, RUN_MODE: 'remote' };
 
-    exec(cmd, { env: { ...process.env, RUN_MODE: 'remote' } }, (error, stdout, stderr) => {
+    exec(cmd, { env: childEnv }, (error, stdout, stderr) => {
         console.log(`Test finished.`);
         if (error) {
             console.log(`Test failed: ${error.message}`);
