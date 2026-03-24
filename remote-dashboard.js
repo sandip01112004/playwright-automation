@@ -33,7 +33,7 @@ app.get('/', (req, res) => {
                 <div class="card" id="main-card">
                     <h2>Run Shipment Test</h2>
                     <div id="initial-form">
-                        <button onclick="startTest()">Start Test</button>
+                        <button id="start-btn" onclick="startTest()">Start Test</button>
                     </div>
                 </div>
 
@@ -52,13 +52,39 @@ app.get('/', (req, res) => {
                     let currentPrompt = null;
 
                     async function startTest() {
-                        await fetch('/run', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ })
-                        });
+                        const btn = document.getElementById('start-btn');
+                        const status = document.getElementById('status');
+                        
+                        btn.disabled = true;
+                        btn.style.opacity = '0.5';
+                        btn.style.cursor = 'not-allowed';
+                        status.innerText = 'Running...';
+                        status.style.color = '#007bff';
 
-                        pollForPrompts();
+                        try {
+                            const response = await fetch('/run', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ })
+                            });
+                            
+                            const result = await response.json();
+                            
+                            if (result.status === 'passed') {
+                                status.innerText = '✅ Test Passed';
+                                status.style.color = '#28a745';
+                            } else {
+                                status.innerText = '❌ Test Failed: ' + (result.message || 'Unknown error');
+                                status.style.color = '#dc3545';
+                            }
+                        } catch (err) {
+                            status.innerText = '❌ Error: ' + err.message;
+                            status.style.color = '#dc3545';
+                        } finally {
+                            btn.disabled = false;
+                            btn.style.opacity = '1';
+                            btn.style.cursor = 'pointer';
+                        }
                     }
 
                     async function pollForPrompts() {
@@ -95,6 +121,9 @@ app.get('/', (req, res) => {
                         document.getElementById('status').innerText = 'Input Sent. Test continuing...';
                         currentPrompt = null;
                     }
+
+                    // Start polling immediately on page load
+                    pollForPrompts();
                 </script>
             </body>
         </html>
@@ -141,23 +170,19 @@ app.post('/submit-input', (req, res) => {
 app.post('/run', (req, res) => {
     console.log(`\n--- [Remote Dashboard] Starting Test Run ---`);
 
-    const isHeadless = process.env.HEADLESS !== 'false';
-    const args = ['playwright', 'test', 'tests/create-shipment.spec.ts'];
-    if (!isHeadless) args.push('--headed');
+    const cmd = `npx playwright test tests/create-shipment.spec.ts --headed`;
+    const childEnv = { ...process.env, RUN_MODE: 'remote' };
 
-    console.log(`Command: npx ${args.join(' ')}`);
-
-    const testProc = spawn('npx', args, {
-        stdio: 'inherit',
-        shell: true,
-        env: { ...process.env, RUN_MODE: 'remote' }
+    exec(cmd, { env: childEnv }, (error, stdout, stderr) => {
+        console.log(`Test finished.`);
+        if (error) {
+            console.log(`Test failed: ${error.message}`);
+            // Extract a shorter error message if possible, or just send the main error
+            res.json({ status: 'failed', message: error.message.split('\n')[0] });
+        } else {
+            res.json({ status: 'passed' });
+        }
     });
-
-    testProc.on('close', (code) => {
-        console.log(`\n--- [Remote Dashboard] Test Run Finished (Exit Code: ${code}) ---`);
-    });
-
-    res.json({ status: 'started' });
 });
 
 app.listen(port, () => {
