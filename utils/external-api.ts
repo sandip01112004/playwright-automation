@@ -53,7 +53,11 @@ export class ExternalApiService {
         const response = await this.fetchData(endpoint);
 
         if (response.status === 'success' && response.data?.results?.length > 0) {
-            const latestResult = response.data.results[0];
+            const results = response.data.results;
+            console.log(`[API] Found ${results.length} invoice(s) for Delivery ID ${deliveryId}. Using the first one.`);
+
+            const latestResult = results[0];
+            console.log(`[API] Selected Invoice: No=${latestResult.invoice_number}, Type=${latestResult.type}, Created=${latestResult.created_at}`);
 
             return {
                 invoiceNumber: latestResult.invoice_number,

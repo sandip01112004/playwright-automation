@@ -77,7 +77,15 @@ export class ShipmentFormPage {
     async fillSupplierInvoiceSection(filePath: string, invoiceNumber: string, date: string, amount: number | string) {
         // Initial upload
         await this.page.waitForURL('**/asn/asnform', { timeout: 15000 }).catch(() => { });
+        await this.uploadInput.waitFor({ state: 'attached', timeout: 30000 });
         await this.uploadInput.setInputFiles(filePath);
+
+        // Dispatch events to ensure UI/framework (Angular/React) detects the change
+        await this.uploadInput.dispatchEvent('change');
+        await this.uploadInput.dispatchEvent('input');
+
+        // Wait for potential virus scanning or signature processing
+        await this.page.waitForTimeout(5000);
 
         // Fill fields
         await this.invoiceNumberInput.scrollIntoViewIfNeeded();
@@ -110,6 +118,9 @@ export class ShipmentFormPage {
 
         if (deliveryDetailsPath) {
             await this.deliveryDetailsUploadInput.setInputFiles(deliveryDetailsPath);
+            await this.deliveryDetailsUploadInput.dispatchEvent('change');
+            await this.deliveryDetailsUploadInput.dispatchEvent('input');
+            await this.page.waitForTimeout(2000);
             await this.documentTypeDropdown.selectOption('OTHERS');
         }
 
