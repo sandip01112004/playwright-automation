@@ -179,7 +179,9 @@ app.post('/run', (req, res) => {
     const isWin = process.platform === 'win32';
     const shell = isWin ? 'powershell.exe' : '/bin/sh';
     const npxCmd = isWin ? 'npx.cmd' : 'npx';
-    const cmd = `${npxCmd} playwright test tests/create-shipment.spec.ts --headed`;
+    const isHeadless = process.env.HEADLESS === 'true';
+    const headedFlag = isHeadless ? '' : '--headed';
+    const cmd = `${npxCmd} playwright test tests/create-shipment.spec.ts ${headedFlag}`;
 
     console.log(`Executing: ${cmd}`);
 

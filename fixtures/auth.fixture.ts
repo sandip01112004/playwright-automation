@@ -27,9 +27,8 @@ export const test = base.extend({
     page: async ({ browser }, use) => {
 
         if (!process.env.AUTH_TOKEN ||
-            !process.env.REFRESH_TOKEN ||
             !process.env.DOMAIN_NAME) {
-            throw new Error('Required auth environment variables (AUTH_TOKEN, REFRESH_TOKEN, DOMAIN_NAME) are missing');
+            throw new Error('Required auth environment variables (AUTH_TOKEN, DOMAIN_NAME) are missing');
         }
 
         const context = await browser.newContext();
@@ -70,19 +69,21 @@ export const test = base.extend({
 
         if (isLoginRequired) {
             const runMode = process.env.RUN_MODE || 'local';
+            const isHeadless = process.env.HEADLESS === 'true';
+            const headedFlag = isHeadless ? '' : '--headed';
             console.log(`[Fixture] Login REQUIRED (URL: ${page.url()}). Launching auth-login spec...`);
 
             // Run auth-login — blocks until OTP is entered and tokens are saved to .env
             // Use the 'env' option for cross-platform environment variable support
-            const authEnv = { 
-                ...process.env, 
+            const authEnv = {
+                ...process.env,
                 RUN_MODE: runMode,
                 // Ensure DASHBOARD_URL is passed through if it exists
                 DASHBOARD_URL: process.env.DASHBOARD_URL || 'http://localhost:5000'
             };
 
             try {
-                execSync(`npx playwright test tests/auth-login.spec.ts --headed`, {
+                execSync(`npx playwright test tests/auth-login.spec.ts ${headedFlag}`, {
                     cwd: path.resolve(__dirname, '..'),
                     stdio: 'inherit',
                     env: authEnv
