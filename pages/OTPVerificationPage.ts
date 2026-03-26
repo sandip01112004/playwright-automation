@@ -15,18 +15,28 @@ export class OTPVerificationPage {
      */
     private async getRemoteInput(name: string): Promise<string> {
         console.log(`Requesting '${name}' from remote dashboard...`);
+        const headers = { 'ngrok-skip-browser-warning': 'true' };
 
         // 1. Tell the dashboard we need an input
-        await this.page.request.get(`${this.dashboardBaseUrl}/request-input/${name}`);
+        await fetch(`${this.dashboardBaseUrl}/request-input/${name}`, { headers }).catch(err => {
+            console.error(`[OTP Sync] Failed to request input ${name}:`, err instanceof Error ? err.message : err);
+        });
 
         // 2. Poll until we get a value
         while (true) {
-            const res = await this.page.request.get(`${this.dashboardBaseUrl}/get-input/${name}`);
-            const data = await res.json();
-
-            if (data.value) {
-                console.log(`Received '${name}': ${data.value}`);
-                return data.value;
+            try {
+                const res = await fetch(`${this.dashboardBaseUrl}/get-input/${name}`, { headers });
+                
+                const contentType = res.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    const data = await res.json();
+                    if (data && data.value) {
+                        console.log(`Received '${name}': ${data.value}`);
+                        return data.value;
+                    }
+                }
+            } catch (err) {
+                // Silently ignore polling errors to avoid crashing the test, just retry
             }
 
             // Wait 2 seconds before polling again

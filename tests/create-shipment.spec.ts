@@ -9,20 +9,35 @@ import * as path from 'path';
 const dashboardUrl = process.env.DASHBOARD_URL || 'http://localhost:5000';
 
 async function promptRemote(name: string): Promise<string> {
+    const headers = { 'ngrok-skip-browser-warning': 'true' };
     console.log(`\n[SYNC] Requesting ${name} from Remote Dashboard (${dashboardUrl})...`);
 
     // Notify server we need input
-    await fetch(`${dashboardUrl}/request-input/${name}`).catch(() => { });
+    await fetch(`${dashboardUrl}/request-input/${name}`, { headers }).catch((err) => { 
+        console.error(`[SYNC] Failed to notify dashboard of request for ${name}:`, err instanceof Error ? err.message : err);
+    });
 
     // Poll until received
     while (true) {
-        const res = await fetch(`${dashboardUrl}/get-input/${name}`).catch(() => null);
-        if (res) {
-            const data = await res.json();
-            if (data.value) {
-                console.log(`[SYNC] Received ${name}: ${data.value}`);
-                return data.value;
+        try {
+            const res = await fetch(`${dashboardUrl}/get-input/${name}`, { headers }).catch(() => null);
+            if (res && res.ok) {
+                const contentType = res.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await res.json();
+                    if (data.value) {
+                        console.log(`[SYNC] Received ${name}: ${data.value}`);
+                        return data.value;
+                    }
+                } else {
+                    const text = await res.text();
+                    if (text.includes('<!DOCTYPE')) {
+                        console.error(`[SYNC] Error: Received HTML instead of JSON from Dashboard. If using ngrok, ensure you bypass the browser warning.`);
+                    }
+                }
             }
+        } catch (err) {
+            console.error(`[SYNC] Polling error:`, err instanceof Error ? err.message : err);
         }
         await new Promise(resolve => setTimeout(resolve, 3000));
     }

@@ -133,6 +133,12 @@ app.get('/', (req, res) => {
 // Endpoint for the test to request input
 app.get('/request-input/:name', (req, res) => {
     const name = req.params.name;
+    // Clear existing waiting prompts to avoid stale UI state from aborted tests
+    for (const key in pendingInputs) {
+        if (pendingInputs[key].status === 'waiting') {
+            delete pendingInputs[key];
+        }
+    }
     pendingInputs[name] = { status: 'waiting', value: null };
     console.log(`[Test] Requesting input: ${name}`);
     res.json({ status: 'ok' });
@@ -170,16 +176,25 @@ app.post('/submit-input', (req, res) => {
 app.post('/run', (req, res) => {
     console.log(`\n--- [Remote Dashboard] Starting Test Run ---`);
 
-    const cmd = `npx playwright test tests/create-shipment.spec.ts --headed`;
+    const isWin = process.platform === 'win32';
+    const shell = isWin ? 'powershell.exe' : '/bin/sh';
+    const npxCmd = isWin ? 'npx.cmd' : 'npx';
+    const cmd = `${npxCmd} playwright test tests/create-shipment.spec.ts --headed`;
+
+    console.log(`Executing: ${cmd}`);
+
     const childEnv = { ...process.env, RUN_MODE: 'remote' };
 
-    exec(cmd, { env: childEnv }, (error, stdout, stderr) => {
+    exec(cmd, { env: childEnv, shell: shell }, (error, stdout, stderr) => {
         console.log(`Test finished.`);
         if (error) {
-            console.log(`Test failed: ${error.message}`);
-            // Extract a shorter error message if possible, or just send the main error
-            res.json({ status: 'failed', message: error.message.split('\n')[0] });
+            console.error(`Test failed with code ${error.code}`);
+            console.error(`STDOUT: ${stdout}`);
+            console.error(`STDERR: ${stderr}`);
+            const shortError = stderr.split('\n')[0] || stdout.split('\n')[0] || error.message.split('\n')[0];
+            res.json({ status: 'failed', message: shortError });
         } else {
+            console.log(`STDOUT: ${stdout}`);
             res.json({ status: 'passed' });
         }
     });

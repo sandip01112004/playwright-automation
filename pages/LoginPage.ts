@@ -7,7 +7,7 @@ export class LoginPage {
 
     constructor(page: Page) {
         this.page = page;
-        this.loginIdInput = page.locator('#loginID');
+        this.loginIdInput = page.getByRole('textbox', { name: /Supplier ID/i }).or(page.locator('#loginID'));
         this.loginButton = page.getByRole('button', { name: 'Login' });
     }
 
