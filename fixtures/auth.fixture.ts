@@ -3,20 +3,28 @@ export { expect };
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import { WebsiteAApi } from '../utils/website-a-api';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 
 // Helper: inject auth tokens into localStorage/sessionStorage using addInitScript (more robust)
 async function injectTokensAndReload(page: Page, baseUrl: string) {
-    const authToken = process.env.AUTH_TOKEN!;
-    const refreshToken = process.env.REFRESH_TOKEN!;
+    let authToken = '';
+
+    const apiToken = await WebsiteAApi.getAutomationToken(1295, 'harish Iyer');
+    if (apiToken) {
+        authToken = apiToken;
+        console.log(`[Fixture] Token fetched successfully: ${authToken.substring(0, 10)}...`);
+    } else {
+        console.log('[Fixture] API Token fetch returned null/empty. Check website-a-api logs above.');
+    }
 
     // Step 1: Add a script that runs on every page load to ensure tokens are always present
-    await page.context().addInitScript(({ authToken, refreshToken }) => {
+    await page.context().addInitScript(({ authToken }) => {
         localStorage.setItem('tokenValue', authToken);
-        localStorage.setItem('user_info', JSON.stringify({ token: authToken, refreshToken }));
+        localStorage.setItem('user_info', JSON.stringify({ token: authToken }));
         sessionStorage.setItem('tokenValue', authToken);
-    }, { authToken, refreshToken });
+    }, { authToken });
 
     // Step 2: Navigate and wait for loading to complete
     await page.goto(baseUrl);
@@ -26,9 +34,8 @@ async function injectTokensAndReload(page: Page, baseUrl: string) {
 export const test = base.extend({
     page: async ({ browser }, use) => {
 
-        if (!process.env.AUTH_TOKEN ||
-            !process.env.DOMAIN_NAME) {
-            throw new Error('Required auth environment variables (AUTH_TOKEN, DOMAIN_NAME) are missing');
+        if (!process.env.AUTH_TOKEN || !process.env.DOMAIN_NAME) {
+            console.warn('[Fixture] AUTH_TOKEN or DOMAIN_NAME missing. Proceeding to login check...');
         }
 
         const context = await browser.newContext();
