@@ -2,13 +2,13 @@ import { test, expect } from '../fixtures/auth.fixture';
 import { ExternalApiService } from '../utils/external-api';
 import { DashboardPage } from '../pages/DashboardPage';
 import { ShipmentFormPage } from '../pages/ShipmentFormPage';
-import { WebsiteAApi } from '../utils/website-a-api';
+import { AutomationService } from '../utils/AutomationService';
 import * as fs from 'fs';
 import * as path from 'path';
 
 test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
     const taskId = Number(process.env.TASK_ID) || 1; // Default to task ID 1 as requested
-    const websiteA = new WebsiteAApi(taskId);
+    const automationService = new AutomationService(taskId);
 
     const dashboardPage = new DashboardPage(page);
     const shipmentFormPage = new ShipmentFormPage(page);
@@ -18,7 +18,7 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
 
     try {
         // Step 0: Report Processing
-        await websiteA.updateTaskStatus('1296'); // processing
+        await automationService.updateTaskStatus(1296); // processing
 
         // Clear docs folder to ensure we're using fresh files
         const docsDir = path.resolve(process.cwd(), 'docs');
@@ -32,7 +32,7 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
         await test.step('Step 1: Find Order by Order ID', async () => {
             await dashboardPage.navigateToOrdersInProcess();
             // Polling for ORDER_NUMBER from your dashboard/API
-            const orderNo = await websiteA.waitForInput('order_number');
+            const orderNo = await automationService.waitForInput('order_number');
             await dashboardPage.performSearch(orderNo);
         });
 
@@ -41,7 +41,7 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
             await dashboardPage.selectCreateShipment();
 
             // Polling for DELIVERY_ID from your dashboard/API
-            const testDeliveryId = await websiteA.waitForInput('delivery_id');
+            const testDeliveryId = await automationService.waitForInput('delivery_id');
 
             let deliveryData;
             try {
@@ -73,13 +73,13 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
         });
 
         // Step 3: Report Completion
-        await websiteA.updateTaskStatus('1299'); // completed
+        await automationService.updateTaskStatus(1299, { scn: invoiceData.invoiceNumber }); // completed
         console.log('\n--- Automation completed successfully ✓ ---');
 
     } catch (err: any) {
         console.error(`\n--- Automation Failed: ${err.message} ---`);
         // Report Failure to your API
-        await websiteA.updateTaskStatus('1300', { error_message: err.message });
+        await automationService.updateTaskStatus(1300, { error_message: err.message });
         throw err; // Ensure Playwright marks the test as failed
     }
 });

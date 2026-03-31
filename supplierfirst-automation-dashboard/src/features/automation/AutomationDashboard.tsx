@@ -7,7 +7,7 @@ import { useTaskPolling } from './hooks/useTaskPolling';
 import './Automation.css';
 
 const AutomationDashboard: React.FC = () => {
-    // Get taskId from URL search parameters, default to 14
+    // Get taskId from URL search parameters, default to 1
     const queryParams = new URLSearchParams(window.location.search);
     const taskId = parseInt(queryParams.get('taskId') || '1', 10);
 
@@ -32,11 +32,12 @@ const AutomationDashboard: React.FC = () => {
     const renderContent = () => {
         if (!task) return <LoadingScreen message="Fetching task details..." />;
 
-        switch (task.status) {
+        const status = Number(task.status);
+        switch (status) {
             case 1296: // processing
             case 1298: // otp_provided
                 return <LoadingScreen message={
-                    (task.status === 1298)
+                    (status === 1298)
                         ? 'OTP Submitted. Resuming automation...'
                         : 'Automating Website B...'
                 } />;
@@ -48,7 +49,7 @@ const AutomationDashboard: React.FC = () => {
                 return <SuccessScreen scn={task.scn} />;
 
             case 1300: // failed
-                return <ErrorScreen message={task.message} scn={task.scn} />;
+                return <ErrorScreen message={task.error_message ?? undefined} scn={task.scn} />;
 
             default:
                 return <LoadingScreen message="Unknown state. Re-syncing..." />;

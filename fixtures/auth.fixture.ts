@@ -3,118 +3,78 @@ export { expect };
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { WebsiteAApi } from '../utils/website-a-api';
+import { AutomationService } from '../utils/AutomationService';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 
-// Helper: inject auth tokens into localStorage/sessionStorage using addInitScript (more robust)
+/**
+ * Helper: inject fresh tokens into browser storage and navigate to base URL.
+ */
 async function injectTokensAndReload(page: Page, baseUrl: string) {
-    let authToken = '';
+    const supplierName = process.env.SUPPLIER_NAME || 'harish Iyer';
+    const apiToken = await AutomationService.getAutomationToken(1295, supplierName);
 
-    const apiToken = await WebsiteAApi.getAutomationToken(1295, 'harish Iyer');
-    if (apiToken) {
-        authToken = apiToken;
-        console.log(`[Fixture] Token fetched successfully: ${authToken.substring(0, 10)}...`);
-    } else {
-        console.log('[Fixture] API Token fetch returned null/empty. Check website-a-api logs above.');
+    if (!apiToken) {
+        throw new Error(`[Auth] Failed to fetch automation token for: ${supplierName}`);
     }
 
-    // Step 1: Add a script that runs on every page load to ensure tokens are always present
-    await page.context().addInitScript(({ authToken }) => {
-        localStorage.setItem('tokenValue', authToken);
-        localStorage.setItem('user_info', JSON.stringify({ token: authToken }));
-        sessionStorage.setItem('tokenValue', authToken);
-    }, { authToken });
+    // Ensure tokens are injected on every page load
+    await page.context().addInitScript(({ token }) => {
+        localStorage.setItem('tokenValue', token);
+        localStorage.setItem('user_info', JSON.stringify({ token }));
+        sessionStorage.setItem('tokenValue', token);
+    }, { token: apiToken });
 
-    // Step 2: Navigate and wait for loading to complete
     await page.goto(baseUrl);
     await page.waitForLoadState('networkidle');
 }
 
-export const test = base.extend({
+export const test = base.extend<{ page: Page }>({
     page: async ({ browser }, use) => {
-
-        if (!process.env.AUTH_TOKEN || !process.env.DOMAIN_NAME) {
-            console.warn('[Fixture] AUTH_TOKEN or DOMAIN_NAME missing. Proceeding to login check...');
-        }
-
         const context = await browser.newContext();
         const page = await context.newPage();
         const baseUrl = process.env.BASE_URL!;
 
-        // Inject zoom on every page navigation via addInitScript
-        // await page.addInitScript(() => {
-        //     window.addEventListener('DOMContentLoaded', () => {
-        //         document.body.style.zoom = "70%";
-        //     });
-        // });
-
-
-        // Step 1: Initial navigation & injection
+        // Step 1: Initial navigation & token injection
         await injectTokensAndReload(page, baseUrl);
 
-        // Step 2: Check for redirect to login page or presence of login elements
-        // This is more robust than just checking the URL
-        console.log('[Fixture] Checking if login is required...');
+        // Step 2: Detect if redirected to login (session expired)
         let isLoginRequired = false;
         try {
-            // Wait for either the login URL or the login input box to appear
             await Promise.race([
-                page.waitForURL(/.*\/login/i, { timeout: 8000 }),
-                page.getByRole('textbox', { name: /Supplier ID/i }).waitFor({ state: 'visible', timeout: 8000 }),
-                page.waitForSelector('#loginID', { timeout: 8000 })
+                page.waitForURL(/.*\/login/i, { timeout: 10000 }),
+                page.waitForURL(/.*\/dashboard/i, { timeout: 10000 })
             ]);
-            isLoginRequired = true;
-        } catch (e) {
-            // If neither appears, we might be on the dashboard already
-            const currentUrl = page.url();
-            const supplierIdVisible = await page.getByRole('textbox', { name: /Supplier ID/i }).isVisible().catch(() => false);
-            if (currentUrl.includes('/login') || supplierIdVisible || await page.locator('#loginID').isVisible()) {
-                isLoginRequired = true;
-            }
+            isLoginRequired = page.url().includes('/login');
+        } catch {
+            isLoginRequired = page.url().includes('/login');
         }
 
         if (isLoginRequired) {
-            const runMode = process.env.RUN_MODE || 'local';
             const isHeadless = process.env.HEADLESS === 'true';
             const headedFlag = isHeadless ? '' : '--headed';
-            console.log(`[Fixture] Login REQUIRED (URL: ${page.url()}). Launching auth-login spec...`);
 
-            // Run auth-login — blocks until OTP is entered and tokens are saved to .env
-            // Use the 'env' option for cross-platform environment variable support
-            const authEnv = {
-                ...process.env,
-                RUN_MODE: runMode,
-                // Ensure DASHBOARD_URL is passed through if it exists
-                DASHBOARD_URL: process.env.DASHBOARD_URL || 'http://localhost:5000'
-            };
+            console.log(`[Auth] Session required. Launching interactive login flow...`);
 
             try {
                 execSync(`npx playwright test tests/auth-login.spec.ts ${headedFlag}`, {
                     cwd: path.resolve(__dirname, '..'),
                     stdio: 'inherit',
-                    env: authEnv
+                    env: { ...process.env, DASHBOARD_URL: process.env.DASHBOARD_URL || 'http://localhost:5000' }
                 });
             } catch (error) {
-                console.error('[Fixture] auth-login.spec.ts failed or was interrupted.');
-                throw error;
+                throw new Error('[Auth] Background login (auth-login.spec.ts) failed or cancelled.');
             }
 
-            // Reload .env with fresh tokens
+            // Sync and re-inject fresh tokens
             dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
-            console.log('[Fixture] Fresh tokens loaded from .env. Re-injecting...\n');
-
-            // Re-inject fresh tokens and reload
             await injectTokensAndReload(page, baseUrl);
-        } else {
-            console.log('[Fixture] Login not required, proceeding to test.');
         }
 
-        // Step 3: Handle Session Timeout Popups Globally (UI modals & Native Dialogs)
+        // Global Session Timeout Handlers
         page.on('dialog', async dialog => {
             if (dialog.message().toLowerCase().includes('session')) {
-                console.log(`[Fixture] Auto-accepting native dialog: ${dialog.message()}`);
-                await dialog.accept();
+                await dialog.accept().catch(() => { });
             }
         });
 
@@ -122,19 +82,16 @@ export const test = base.extend({
             try {
                 const popup = page.getByText(/Session Timeout/i);
                 if (await popup.isVisible().catch(() => false)) {
-                    console.log('[Fixture] Session Timeout detected in UI. Clicking Continue...');
                     await page.getByRole('button', { name: 'Continue' }).click().catch(() => { });
                 }
-            } catch (e) { /* Ignore during navigation */ }
-        }, 10000); // Check every 10 seconds
+            } catch (e) { /* Ignore navigation errors */ }
+        }, 15000);
 
-        // URL is expected — proceed with the test normally
         try {
             await use(page);
         } finally {
             clearInterval(sessionInterval);
+            await context.close();
         }
-
-        await context.close();
     },
 });

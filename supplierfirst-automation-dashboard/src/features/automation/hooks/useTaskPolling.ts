@@ -22,12 +22,16 @@ export const useTaskPolling = (taskId: number) => {
         try {
             const data = await taskApi.getTaskStatus(taskId);
             setTask(data);
-            if (loading) setLoading(false);
-        } catch (err) {
-            console.error('Polling error:', err);
-            // Don't set global error yet, just Log. Persistent failure might need handling.
+            setError(null);
+        } catch (err: any) {
+            console.error('[useTaskPolling] Polling error:', err);
+            const msg = err?.response?.data?.message || err?.message || 'Failed to fetch task status';
+            console.log(`[useTaskPolling] Setting error message: "${msg}"`);
+            setError(msg);
+        } finally {
+            setLoading(false); // Always stop loading after first attempt, success or failure
         }
-    }, [taskId, loading]);
+    }, [taskId]); // ✅ Removed 'loading' from deps — was causing interval to reset on every state change
 
     useEffect(() => {
         fetchInitialData();

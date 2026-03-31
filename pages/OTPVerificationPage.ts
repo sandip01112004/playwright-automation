@@ -1,5 +1,5 @@
 import { Page, Locator } from '@playwright/test';
-import { WebsiteAApi } from '../utils/website-a-api';
+import { AutomationService } from '../utils/AutomationService';
 
 export class OTPVerificationPage {
     readonly page: Page;
@@ -28,11 +28,11 @@ export class OTPVerificationPage {
     }
 
     /**
-     * Handles OTP verification using WebsiteAApi.
+     * Handles OTP verification using AutomationService.
      */
-    async verify(websiteA: WebsiteAApi) {
+    async verify(automationService: AutomationService) {
         // Fetch OTP from the new API system
-        const otp = await websiteA.waitForOtp();
+        const otp = await automationService.waitForOtp();
         await this.fillOTP(otp);
 
         // Wait for the button to be enabled/clickable

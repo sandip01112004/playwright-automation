@@ -9,9 +9,14 @@ export type AutomationStatus =
 export interface TaskData {
     id: number;
     status: AutomationStatus;
-    scn?: string;
-    message?: string;
     otp?: string;
+    error_message?: string | null;
+    scn?: string;
+    task_type?: number;
+    created_by?: number;
+    updated_by?: number;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export interface LookupData {
