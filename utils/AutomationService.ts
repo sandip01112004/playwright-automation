@@ -67,7 +67,7 @@ export class AutomationService {
         const start = Date.now();
         let attempts = 0;
 
-        while (Date.now() - start < timeoutMs) {
+        while (timeoutMs === 0 || Date.now() - start < timeoutMs) {
             try {
                 const response = await axios.get(`${this.baseUrl}/api/v1/automation_task/${this.taskId}/`, {
                     headers: this.headers
@@ -96,10 +96,10 @@ export class AutomationService {
     /**
      * Poll until the user has provided an OTP in the dashboard
      */
-    async waitForOtp(timeoutMs: number = 300000) {
+    async waitForOtp(timeoutMs: number = 0) {
         return this.pollTaskField<string>(
             'otp',
-            (data) => data.otp && data.status === 'otp_provided',
+            (data) => data.otp && (Number(data.status) === 1298 ),
             timeoutMs
         );
     }
