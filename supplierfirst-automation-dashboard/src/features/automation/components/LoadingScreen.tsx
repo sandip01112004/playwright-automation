@@ -9,7 +9,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ message = 'Automating tas
         <div className="glass-card">
             <div className="status-badge loading">Processing</div>
             <div className="loader"></div>
-            <h2>Please Wait</h2>
+            <h2>Running Automation</h2>
             <p>{message}</p>
         </div>
     );

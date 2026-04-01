@@ -22,19 +22,24 @@ export class DashboardPage {
 
     /**
      * Handles post-login setup by waiting for the page to load and dismissing common popups.
+     * @param maxPopups - Maximum number of popups to handle (default 1)
      */
-    async handlePostLoginSetup() {
+    async handlePostLoginSetup(maxPopups: number = 2) {
         await this.page.waitForLoadState('load');
         await this.page.waitForLoadState('networkidle');
 
-        // Dismiss up to 2 popups
-        for (let i = 0; i < 2; i++) {
+        // Dismiss common dashboard popups if they appear
+        for (let i = 0; i < maxPopups; i++) {
             try {
                 const popup = this.closePopupButton.first();
-                await popup.waitFor({ state: 'visible' });
+                // Wait up to 5 seconds for the popup close button to be visible
+                await popup.waitFor({ state: 'visible', timeout: 5000 });
+                console.log(`Closing dashboard popup ${i + 1}...`);
                 await popup.click();
-                await popup.waitFor({ state: 'hidden' });
-            } catch {
+                // Ensure it's hidden before continuing/finishing
+                await popup.waitFor({ state: 'hidden', timeout: 3000 });
+            } catch (error) {
+                // If it doesn't appear or closing fails, we assume no more popups are present
                 break;
             }
         }

@@ -39,7 +39,7 @@ const AutomationDashboard: React.FC = () => {
                 return <LoadingScreen message={
                     (status === 1298)
                         ? 'OTP Submitted. Resuming automation...'
-                        : 'Automating Website B...'
+                        : 'Automating SupplierFirst...'
                 } />;
 
             case 1297: // awaiting_otp
