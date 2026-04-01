@@ -8,7 +8,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 test('Session Refresh: Login and Capture Tokens', async ({ page }) => {
-    const taskId =  1;
+    const taskId = Number(process.env.TASK_ID) || 1;
     const automationService = new AutomationService(taskId);
 
     const loginPage = new LoginPage(page);
@@ -34,20 +34,31 @@ test('Session Refresh: Login and Capture Tokens', async ({ page }) => {
         // Verification and Token Capture
         await otpVerificationPage.verify(automationService);
 
+        // Wait for redirect to finish and for the network to stabilize
+        console.log('[Auth] OTP Verified. Waiting for session to synchronize...');
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(2000); // Buffer for slower redirects/storage writes
+
         const sessionData = await page.evaluate(() => {
-            const token = localStorage.getItem('tokenValue') || '';
-            const userInfoRaw = localStorage.getItem('userInfo') || '{}';
-            const userInfo = JSON.parse(userInfoRaw);
-            const username = `${userInfo.firstname || ''} ${userInfo.lastname || ''}`.trim() || 'unknown';
+            // Helper to check both local and session storage
+            const getFromStorage = (key: string) => localStorage.getItem(key) || sessionStorage.getItem(key);
+
+            const token = getFromStorage('tokenValue') || '';
+            const raw = getFromStorage('userInfo') || '{}';
+            const info = JSON.parse(raw);
+            const username = `${info.firstname || ''}${info.lastname || ''}`.trim().toLowerCase();
+
             return { username, token };
         });
 
         if (!sessionData.token) {
-            throw new Error('Capture failed: tokenValue not found in localStorage.');
+            throw new Error('Capture failed: tokenValue not found in storage after login.');
         }
 
-        await automationService.saveAutomationToken(sessionData.username, sessionData.token);
-        console.log(`[Auth] Session refreshed for user: ${sessionData.username}`);
+        // Directly patch the token for the SUPPLIER_NAME in .env
+        await automationService.saveAutomationToken(sessionData.token);
+        console.log(`[Auth] Session refreshed and token patched for system.`);
+
 
     } catch (err: any) {
         console.error(`[Auth] Flow failed: ${err.message}`);

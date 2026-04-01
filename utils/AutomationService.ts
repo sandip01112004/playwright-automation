@@ -39,13 +39,18 @@ export class AutomationService {
     /**
      * Update task status (e.g., 'awaiting_otp', 'completed', 'failed')
      */
-    async updateTaskStatus(status: number, extra: { otp?: string; error_message?: string; scn?: string } = {}) {
+    async updateTaskStatus(status: number, extra: { otp?: string; error_message?: string } = {}) {
         console.log(`[AutomationService] Updating Task ${this.taskId} to: ${status}`);
+        const payload: any = { status, ...extra };
+
+        // If status is 1296 (Processing), explicitly clear old data
+        if (status === 1296) {
+            payload.otp = '';
+            payload.error_message = '';
+        }
+
         try {
-            const response = await axios.patch(`${this.baseUrl}/api/v1/automation_task/${this.taskId}/`, {
-                status,
-                ...extra
-            }, {
+            const response = await axios.patch(`${this.baseUrl}/api/v1/automation_task/${this.taskId}/`, payload, {
                 headers: this.headers
             });
             return response.data;
@@ -99,7 +104,7 @@ export class AutomationService {
     async waitForOtp(timeoutMs: number = 0) {
         return this.pollTaskField<string>(
             'otp',
-            (data) => data.otp && (Number(data.status) === 1298 ),
+            (data) => data.otp && (Number(data.status) === 1298),
             timeoutMs
         );
     }
@@ -116,20 +121,32 @@ export class AutomationService {
     }
 
     /**
-     * Post session/token data after successful login
+     * Directly update the automation token for the user defined in .env (SUPPLIER_NAME)
      */
-    async saveAutomationToken(username: string, token: string) {
+    async saveAutomationToken(token: string) {
+        const username = process.env.SUPPLIER_NAME!;
         try {
-            const response = await axios.post(`${this.baseUrl}/api/v1/automation_token/`, {
-                username,
-                token_data: token,
-                target_system: 1295
-            }, {
-                headers: this.headers
-            });
-            return response.data;
+            // Search for existing record
+            const searchUrl = `${this.baseUrl}/api/v1/automation_token/?target_system=1295&username=${encodeURIComponent(username)}`;
+            const searchResponse = await axios.get(searchUrl, { headers: this.headers });
+            const results = searchResponse.data?.data?.results || [];
+
+            if (results.length > 0) {
+                const tokenId = results[0].id;
+                console.log(`[AutomationService] Patching token (ID: ${tokenId}) for ${username}`);
+                await axios.patch(`${this.baseUrl}/api/v1/automation_token/${tokenId}/`, {
+                    token_data: token
+                }, { headers: this.headers });
+            } else {
+                console.log(`[AutomationService] Creating new token for ${username}`);
+                await axios.post(`${this.baseUrl}/api/v1/automation_token/`, {
+                    username,
+                    token_data: token,
+                    target_system: 1295
+                }, { headers: this.headers });
+            }
         } catch (err: any) {
-            console.error(`[AutomationService] Failed to save automation token: ${err.message}`);
+            console.error(`[AutomationService] Token sync failed: ${err.message}`);
             throw err;
         }
     }

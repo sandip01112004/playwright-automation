@@ -34,6 +34,13 @@ export const test = base.extend<{ page: Page }>({
         const context = await browser.newContext();
         const page = await context.newPage();
         const baseUrl = process.env.BASE_URL!;
+        const taskId = Number(process.env.TASK_ID) || 1;
+        const automationService = new AutomationService(taskId);
+
+        // Reset status to 1296 (Processing) at the very start of the fixture
+        await automationService.updateTaskStatus(1296).catch(err => {
+            console.error(`[Auth] Failed to reset task status: ${err.message}`);
+        });
 
         // Step 1: Initial navigation & token injection
         await injectTokensAndReload(page, baseUrl);
@@ -60,7 +67,7 @@ export const test = base.extend<{ page: Page }>({
                 execSync(`npx playwright test tests/auth-login.spec.ts ${headedFlag}`, {
                     cwd: path.resolve(__dirname, '..'),
                     stdio: 'inherit',
-                    env: { ...process.env, DASHBOARD_URL: process.env.DASHBOARD_URL || 'http://localhost:5000' }
+                    env: { ...process.env, TASK_ID: taskId.toString(), DASHBOARD_URL: process.env.DASHBOARD_URL || 'http://localhost:5000' }
                 });
             } catch (error) {
                 throw new Error('[Auth] Background login (auth-login.spec.ts) failed or cancelled.');

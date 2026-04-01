@@ -46,10 +46,10 @@ const AutomationDashboard: React.FC = () => {
                 return <OtpInputScreen onSubmit={submitOtp} />;
 
             case 1299: // completed
-                return <SuccessScreen scn={task.scn} />;
+                return <SuccessScreen />;
 
             case 1300: // failed
-                return <ErrorScreen message={task.error_message ?? undefined} scn={task.scn} />;
+                return <ErrorScreen message={task.error_message ?? undefined} />;
 
             default:
                 return <LoadingScreen message="Unknown state. Re-syncing..." />;

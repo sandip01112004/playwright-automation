@@ -17,8 +17,6 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
     let invoiceData: any;
 
     try {
-        // Step 0: Report Processing
-        await automationService.updateTaskStatus(1296); // processing
 
         // Clear docs folder to ensure we're using fresh files
         const docsDir = path.resolve(process.cwd(), 'docs');
@@ -73,7 +71,7 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
         });
 
         // Step 3: Report Completion
-        await automationService.updateTaskStatus(1299, { scn: invoiceData.invoiceNumber }); // completed
+        await automationService.updateTaskStatus(1299); // completed
         console.log('\n--- Automation completed successfully ✓ ---');
 
     } catch (err: any) {

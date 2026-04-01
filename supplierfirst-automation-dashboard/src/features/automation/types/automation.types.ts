@@ -11,7 +11,6 @@ export interface TaskData {
     status: AutomationStatus;
     otp?: string;
     error_message?: string | null;
-    scn?: string;
     task_type?: number;
     created_by?: number;
     updated_by?: number;
