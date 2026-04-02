@@ -1,19 +1,19 @@
 import { test as base, Page, expect } from '@playwright/test';
 export { expect };
-import * as dotenv from 'dotenv';
 import * as path from 'path';
+import * as dotenv from 'dotenv';
 import { execSync } from 'child_process';
-import { AutomationService } from '../utils/AutomationService';
+import { AutomationService } from '../utils/automation-service';
 import { AutomationPayload } from '../types/automation';
-
-dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
+import { config } from '../utils/config';
 
 /**
  * Helper: inject fresh tokens into browser storage and navigate to base URL.
  */
 async function injectTokensAndReload(page: Page, baseUrl: string) {
-    const supplierName = process.env.SUPPLIER_NAME || 'harish Iyer';
-    const apiToken = await AutomationService.getAutomationToken(1295, supplierName);
+    const supplierName = config.SUPPLIER_NAME;
+    const targetSystemId = config.TARGET_SYSTEM_ID;
+    const apiToken = await AutomationService.getAutomationToken(targetSystemId, supplierName);
 
     if (!apiToken) {
         throw new Error(`[Auth] Failed to fetch automation token for: ${supplierName}`);
@@ -51,8 +51,8 @@ export const test = base.extend<{ page: Page, payload: AutomationPayload }>({
     page: async ({ browser, payload }, use) => {
         const context = await browser.newContext();
         const page = await context.newPage();
-        const baseUrl = process.env.BASE_URL!;
-        const taskId = Number(process.env.TASK_ID) || 1;
+        const baseUrl = config.BASE_URL;
+        const taskId = payload.task_id || 1;
         const automationService = new AutomationService(taskId);
 
         // Reset status to 1296 (Processing) at the very start of the fixture
@@ -60,7 +60,7 @@ export const test = base.extend<{ page: Page, payload: AutomationPayload }>({
             console.error(`[Auth] Failed to reset task status: ${err.message}`);
         });
 
-        // Step 1: Initial navigation & token injection
+        // Step 1: Initial token injection
         await injectTokensAndReload(page, baseUrl);
 
         // Step 2: Detect if redirected to login (session expired)
@@ -76,10 +76,9 @@ export const test = base.extend<{ page: Page, payload: AutomationPayload }>({
         }
 
         if (isLoginRequired) {
+            console.log(`[Auth] Session expired or missing. Launching interactive login flow...`);
             const isHeadless = process.env.HEADLESS === 'true';
             const headedFlag = isHeadless ? '' : '--headed';
-
-            console.log(`[Auth] Session required. Launching interactive login flow...`);
 
             try {
                 execSync(`npx playwright test tests/auth-login.spec.ts ${headedFlag}`, {
@@ -92,7 +91,7 @@ export const test = base.extend<{ page: Page, payload: AutomationPayload }>({
             }
 
             // Sync and re-inject fresh tokens
-            dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
+            config.refresh();
             await injectTokensAndReload(page, baseUrl);
         }
 
