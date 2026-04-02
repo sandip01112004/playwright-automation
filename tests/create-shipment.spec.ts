@@ -14,7 +14,6 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
     const shipmentFormPage = new ShipmentFormPage(page);
     const apiService = new ExternalApiService();
 
-    let invoiceData: any;
 
     try {
 
@@ -29,44 +28,58 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
 
         await test.step('Step 1: Find Order by Order ID', async () => {
             await dashboardPage.navigateToOrdersInProcess();
-            // Polling for ORDER_NUMBER from your dashboard/API
-            const orderNo = await automationService.waitForInput('order_number');
-            await dashboardPage.performSearch(orderNo);
+
+            // PRIORITY: Use order_id directly from the trigger payload (Correction per user)
+            const orderId = automationService.payload?.order_id;
+
+            if (!orderId) {
+                throw new Error('Missing "order_id" in trigger payload. Please provide it to start searching.');
+            }
+
+            console.log(`[Automation] Searching for Order ID: ${orderId}`);
+            await dashboardPage.performSearch(orderId.toString());
         });
 
         await test.step('Step 2: Create Shipment and Complete Form', async () => {
             await dashboardPage.openShipmentMenu();
             await dashboardPage.selectCreateShipment();
 
-            // Polling for DELIVERY_ID from your dashboard/API
-            const testDeliveryId = await automationService.waitForInput('delivery_id');
-
-            let deliveryData;
-            try {
-                [invoiceData, deliveryData] = await Promise.all([
-                    apiService.getInvoiceDetails(testDeliveryId),
-                    apiService.getDeliveryDetails(testDeliveryId)
-                ]);
-            } catch (error) {
-                console.error('Failed to fetch API data:', error instanceof Error ? error.message : error);
-                throw new Error(`External API unavailable for Delivery ID: ${testDeliveryId}`);
+            const payload = automationService.payload;
+            if (!payload?.invoice || !payload?.delivery) {
+                throw new Error('Invoice or Delivery data missing in trigger payload.');
             }
 
-            const invoiceFileName = new URL(invoiceData.url).pathname.split('/').pop() || 'invoice.pdf';
-            const deliveryFileName = deliveryData.displayFileName || (new URL(deliveryData.url).pathname.split('/').pop()) || 'delivery.pdf';
+            console.log('[Automation] Using data from trigger payload.');
+
+            const invoiceUrl = payload.invoice.presigned_url;
+            const invoiceNumber = payload.invoice.invoice_number;
+            const invoiceAmount = payload.invoice.total_amount;
+            const invoiceDate = payload.invoice.created_at.split('T')[0];
+
+            const deliveryMedia = payload.delivery.delivery_media?.[0];
+            if (!deliveryMedia) {
+                throw new Error('No delivery media found in payload.');
+            }
+
+            const deliveryUrl = deliveryMedia.presigned_url;
+            const deliveryFileName = deliveryMedia.display_file_name || 'delivery.pdf';
+            const quantityKg = parseFloat(payload.delivery.quantity);
+            const quantityMt = quantityKg / 1000;
+
+            const invoiceFileName = new URL(invoiceUrl).pathname.split('/').pop() || 'invoice.pdf';
 
             const [invoicePath, deliveryPath] = await Promise.all([
-                apiService.downloadFile(invoiceData.url, invoiceFileName),
-                apiService.downloadFile(deliveryData.url, deliveryFileName)
+                apiService.downloadFile(invoiceUrl, invoiceFileName),
+                apiService.downloadFile(deliveryUrl, deliveryFileName)
             ]);
 
             await shipmentFormPage.completeShipmentForm({
                 invoicePath: invoicePath,
-                invoiceNumber: invoiceData.invoiceNumber,
-                date: invoiceData.date,
-                amount: invoiceData.amount,
+                invoiceNumber: invoiceNumber,
+                date: invoiceDate,
+                amount: invoiceAmount,
                 deliveryDetailsPath: deliveryPath,
-                quantityMt: deliveryData.quantityMt
+                quantityMt: quantityMt
             });
         });
 

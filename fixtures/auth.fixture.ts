@@ -4,6 +4,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { AutomationService } from '../utils/AutomationService';
+import { AutomationPayload } from '../types/automation';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 
@@ -29,8 +30,25 @@ async function injectTokensAndReload(page: Page, baseUrl: string) {
     await page.waitForLoadState('networkidle');
 }
 
-export const test = base.extend<{ page: Page }>({
-    page: async ({ browser }, use) => {
+export const test = base.extend<{ page: Page, payload: AutomationPayload }>({
+    payload: async ({ }, use) => {
+        const encoded = process.env.TASK_PAYLOAD;
+        if (!encoded) {
+            // Default/Fallback for local testing if needed
+            await use({} as AutomationPayload);
+            return;
+        }
+
+        try {
+            const decoded = Buffer.from(encoded, 'base64').toString('utf-8');
+            const parsed = JSON.parse(decoded) as AutomationPayload;
+            await use(parsed);
+        } catch (error) {
+            console.error(`[Fixture] Failed to parse TASK_PAYLOAD: ${error}`);
+            await use({} as AutomationPayload);
+        }
+    },
+    page: async ({ browser, payload }, use) => {
         const context = await browser.newContext();
         const page = await context.newPage();
         const baseUrl = process.env.BASE_URL!;

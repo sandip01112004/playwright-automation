@@ -10,6 +10,7 @@ export class AutomationService {
     private taskId: number;
     private baseUrl: string;
     private headers: any;
+    public payload: any = null;
 
     constructor(taskId: number, baseUrl: string = process.env.WEBSITE_A_BASE_URL || 'https://api-dev-next.biofuelcircle.com') {
         this.taskId = taskId;
@@ -19,6 +20,17 @@ export class AutomationService {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         };
+
+        // Decode payload if provided by the Trigger API
+        if (process.env.TASK_PAYLOAD) {
+            try {
+                const decoded = Buffer.from(process.env.TASK_PAYLOAD, 'base64').toString('utf8');
+                this.payload = JSON.parse(decoded);
+                console.log(`[AutomationService] Loaded payload for Task ${this.taskId}`);
+            } catch (err) {
+                console.error(`[AutomationService] Failed to decode TASK_PAYLOAD: ${err}`);
+            }
+        }
     }
 
     /**
@@ -110,9 +122,17 @@ export class AutomationService {
     }
 
     /**
-     * Poll until a specific field is provided in the task object
+     * Poll until a specific field is provided in the task object.
+     * PRIORITY: If the field exists in the initial payload, use it immediately.
      */
     async waitForInput(fieldName: string, timeoutMs: number = 300000): Promise<string> {
+        // 1. Check the local payload first (Industrial Standard: No polling if data is provided)
+        if (this.payload && this.payload[fieldName]) {
+            console.log(`[AutomationService] Using ${fieldName} from initial payload.`);
+            return this.payload[fieldName].toString();
+        }
+
+        // 2. Otherwise, fall back to polling the BFC database
         return this.pollTaskField<string>(
             fieldName,
             (data) => !!data[fieldName],

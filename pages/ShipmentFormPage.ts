@@ -163,7 +163,7 @@ export class ShipmentFormPage {
 
         await this.transporterNameInput.fill(transporterName);
 
-        const today = new Date().toISOString().split('T')[0];
+        const today = new Date().toISOString().split('T')[0] ?? '';
         await this.arrivalDateInput.fill(today);
 
         await this.sameAsInvoiceCheckbox.waitFor({ state: 'visible', timeout: 10000 });

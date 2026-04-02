@@ -24,7 +24,7 @@ export function updateEnv(updates: Record<string, string>) {
         const parts = line.split('=');
         if (parts.length < 2) return line;
 
-        const key = parts[0].trim();
+        const key = parts[0]!.trim();
         if (updates[key] !== undefined) {
             updatedKeys.add(key);
             return `${key}=${updates[key]}`;

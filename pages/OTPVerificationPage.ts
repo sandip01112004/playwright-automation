@@ -22,7 +22,7 @@ export class OTPVerificationPage {
 
         // Use individual key presses to ensure all events (keydown, keypress, keyup) fire correctly
         for (let i = 0; i < 6; i++) {
-            await this.page.keyboard.press(otp[i]);
+            await this.page.keyboard.press(otp.charAt(i));
             await this.page.waitForTimeout(100); // Small delay to mimic human speed
         }
     }
