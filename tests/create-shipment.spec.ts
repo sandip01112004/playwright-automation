@@ -18,7 +18,7 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
     try {
 
         // Clear docs folder to ensure we're using fresh files
-        const docsDir = path.resolve(process.cwd(), 'docs');
+        const docsDir = path.resolve(process.cwd(), 'data/docs');
         if (fs.existsSync(docsDir)) {
             fs.readdirSync(docsDir).forEach(file => fs.unlinkSync(path.join(docsDir, file)));
         }
@@ -62,7 +62,7 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
             }
 
             const deliveryUrl = deliveryMedia.presigned_url;
-            const deliveryFileName = deliveryMedia.display_file_name || 'delivery.pdf';
+            const deliveryFileName = new URL(deliveryUrl).pathname.split('/').pop() || 'delivery.pdf';
             const quantityKg = parseFloat(payload.delivery.quantity);
             const quantityMt = quantityKg / 1000;
 
