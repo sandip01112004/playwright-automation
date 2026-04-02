@@ -15,15 +15,8 @@ app.use(express.json());
 // Error handling middleware for JSON parsing
 app.use((err: any, req: Request, res: Response, next: any) => {
     if (err instanceof SyntaxError && 'body' in err) {
-        console.error(`\n[API] [${new Date().toLocaleTimeString()}] JSON SyntaxError detected!`);
-        console.error(`[API] Message: ${err.message}`);
-        console.error(`[API] Raw body that failed to parse (first 100 chars):`);
-        console.error(`--------------------------------------------------`);
-        // Note: req.body might not be populated if parsing failed, 
-        // but some body-parsers attach the raw body to the error object.
         const rawBody = (err as any).body;
         console.error(rawBody ? rawBody.toString().substring(0, 500) : 'No raw body available in error object.');
-        console.error(`--------------------------------------------------\n`);
 
         return res.status(400).json({
             error: 'Malformed JSON payload',
@@ -36,26 +29,27 @@ app.use((err: any, req: Request, res: Response, next: any) => {
 /**
  * TRIGGER ENDPOINT
  * Receives the full payload from BFC and spawns a Playwright worker.
- * Payload Example: { "taskId": 123, "username": "...", "orderData": {...} }
  */
 app.post('/api/trigger', (req: Request, res: Response) => {
     const payload = req.body;
-    // Handle both taskId (old) and task_id (new/official)
+
+    // Support both snake_case and camelCase for Task ID
     const task_id = payload.task_id || payload.taskId;
 
     if (!task_id) {
+        console.error(`[API] Rejecting request: Missing task_id in payload:`, JSON.stringify(payload));
         return res.status(400).json({
-            error: 'Missing task_id or taskId in payload. task_id is required to track status.'
+            error: 'Missing task_id or taskId in payload.'
         });
     }
 
-    console.log(`\n[API] [${new Date().toLocaleTimeString()}] Trigger received for Task ID: ${task_id}`);
+    console.log(`\n************************************************`);
+    console.log(`[API] TRIGGER RECEIVED FOR TASK ID: ${task_id}`);
+    console.log(`[API] URL Base: ${process.env.BFC_API_URL}`);
+    console.log(`[API] Full Payload:`, JSON.stringify(payload, null, 2));
+    console.log(`************************************************\n`);
 
-    // Log keys in payload for transparency
-    const payloadKeys = Object.keys(payload);
-    console.log(`[API] Payload keys detected: [${payloadKeys.join(', ')}]`);
-
-    // 1. Respond to BFC immediately (Industrial Standard: Asynchronous Handshake)
+    // 1. Respond to BFC immediately
     res.status(202).json({
         message: 'Task accepted. Automation worker starting in background.',
         taskId: task_id,
@@ -67,11 +61,9 @@ app.post('/api/trigger', (req: Request, res: Response) => {
     const payloadString = JSON.stringify(payload);
     const encodedPayload = Buffer.from(payloadString).toString('base64');
 
-    // Capture token from Authorization header or from payload body
+    // Capture token ONLY from Authorization header (Security Enforcement)
     const authHeader = req.headers.authorization;
-    const incomingToken = authHeader?.startsWith('Bearer ')
-        ? authHeader.substring(7)
-        : (payload.external_api_token || payload.api_token);
+    const incomingToken = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.substring(7) : '';
 
     console.log(`[Worker] Spawning Playwright process for Task ${task_id}...`);
     if (incomingToken) {
@@ -86,20 +78,30 @@ app.post('/api/trigger', (req: Request, res: Response) => {
             ...process.env,
             TASK_ID: task_id.toString(),
             TASK_PAYLOAD: encodedPayload,
-            // Override EXTERNAL_API_TOKEN with the one from the trigger request if provided
-            EXTERNAL_API_TOKEN: incomingToken || process.env.EXTERNAL_API_TOKEN
+            // Override dynamic BFC Token from trigger request
+            BFC_API_TOKEN: incomingToken || ''
         },
         shell: true
     });
 
     // Capture standard output for logging
     pwProcess.stdout.on('data', (data) => {
-        console.log(`[PW-Task-${task_id}]: ${data.toString().trim()}`);
+        const lines = data.toString().split('\n');
+        lines.forEach((line: string) => {
+            if (line.trim()) {
+                console.log(`[PW-Task-${task_id}]: ${line.trim()}`);
+            }
+        });
     });
 
     // Capture errors
     pwProcess.stderr.on('data', (data) => {
-        console.error(`[PW-Error-${task_id}]: ${data.toString().trim()}`);
+        const lines = data.toString().split('\n');
+        lines.forEach((line: string) => {
+            if (line.trim()) {
+                console.error(`[PW-Error-${task_id}]: ${line.trim()}`);
+            }
+        });
     });
 
     pwProcess.on('close', (code) => {
@@ -112,7 +114,7 @@ app.post('/api/trigger', (req: Request, res: Response) => {
  */
 app.listen(PORT, () => {
     console.log(`\n================================================`);
-    console.log(`🚀 Automation Trigger API Running`);
-    console.log(`🔗 Endpoint: http://localhost:${PORT}/api/trigger`);
+    console.log(`Automation Trigger API Running`);
+    console.log(`Endpoint: http://localhost:${PORT}/api/trigger`);
     console.log(`================================================\n`);
 });

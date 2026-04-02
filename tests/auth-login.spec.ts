@@ -2,10 +2,8 @@ import { test, expect } from '@playwright/test';
 import { LoginPage } from '../pages/LoginPage';
 import { OTPSelectionPage } from '../pages/OTPSelectionPage';
 import { OTPVerificationPage } from '../pages/OTPVerificationPage';
-import { AutomationService } from '../utils/AutomationService';
-import * as dotenv from 'dotenv';
-
-dotenv.config();
+import { AutomationService } from '../utils/automation-service';
+import { config } from '../utils/config';
 
 test('Session Refresh: Login and Capture Tokens', async ({ page }) => {
     const taskId = Number(process.env.TASK_ID) || 1;
@@ -20,7 +18,7 @@ test('Session Refresh: Login and Capture Tokens', async ({ page }) => {
         await automationService.updateTaskStatus(1296); // Processing
 
         await loginPage.navigate();
-        await loginPage.enterLoginId(process.env.LOGIN_ID || '');
+        await loginPage.enterLoginId(config.SUPPLIER_ID);
 
         // OTP Selection
         await expect(page).toHaveURL(/.*\/sendOTP/);
@@ -35,7 +33,6 @@ test('Session Refresh: Login and Capture Tokens', async ({ page }) => {
         await otpVerificationPage.verify(automationService);
 
         // Wait for redirect to finish and for the network to stabilize
-        console.log('[Auth] OTP Verified. Waiting for session to synchronize...');
         await page.waitForLoadState('networkidle');
         await page.waitForTimeout(2000); // Buffer for slower redirects/storage writes
 
@@ -57,7 +54,6 @@ test('Session Refresh: Login and Capture Tokens', async ({ page }) => {
 
         // Directly patch the token for the SUPPLIER_NAME in .env
         await automationService.saveAutomationToken(sessionData.token);
-        console.log(`[Auth] Session refreshed and token patched for system.`);
 
 
     } catch (err: any) {

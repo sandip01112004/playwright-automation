@@ -1,5 +1,5 @@
 import { Page, Locator } from '@playwright/test';
-import { AutomationService } from '../utils/AutomationService';
+import { AutomationService } from '../utils/automation-service';
 
 export class OTPVerificationPage {
     readonly page: Page;
