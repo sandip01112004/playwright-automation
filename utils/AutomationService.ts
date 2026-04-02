@@ -38,10 +38,20 @@ export class AutomationService {
      */
     async getTask() {
         try {
-            const response = await axios.get(`${this.baseUrl}/api/v1/automation_task/${this.taskId}`, {
+            console.log(`[AutomationService] Fetching Task ${this.taskId} from ${this.baseUrl}...`);
+            const response = await axios.get(`${this.baseUrl}/api/v1/automation_task/${this.taskId}/`, {
                 headers: this.headers
             });
-            return response.data.data || response.data;
+            const data = response.data.data || response.data;
+            console.log(`[AutomationService] Task Response Data Keys: [${Object.keys(data).join(', ')}]`);
+
+            if (data.payload) {
+                this.payload = data.payload;
+                console.log(`[AutomationService] Refreshed payload for Task ${this.taskId}`);
+            } else {
+                console.warn(`[AutomationService] No payload field found in Task ${this.taskId} response.`);
+            }
+            return data;
         } catch (err: any) {
             console.error(`[AutomationService] Failed to fetch task: ${err.message}`);
             throw err;

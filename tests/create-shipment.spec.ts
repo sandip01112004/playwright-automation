@@ -44,29 +44,38 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
             await dashboardPage.openShipmentMenu();
             await dashboardPage.selectCreateShipment();
 
+            // PRIORITY: Use the trigger payload directly (fresh from POST request)
+            // Note: We removed getTask() refresh here because it might overwrite fresh trigger URLs with stale backend data.
             const payload = automationService.payload;
             if (!payload?.invoice || !payload?.delivery) {
                 throw new Error('Invoice or Delivery data missing in trigger payload.');
             }
 
-            console.log('[Automation] Using data from trigger payload.');
+            console.log(`[Automation] Invoice URL: ${payload.invoice.presigned_url}`);
+            const deliveryMedia = payload.delivery.delivery_media?.[0];
+            if (!deliveryMedia) {
+                throw new Error('No delivery media found in payload.');
+            }
+            console.log(`[Automation] Delivery URL: ${deliveryMedia.presigned_url}`);
 
             const invoiceUrl = payload.invoice.presigned_url;
             const invoiceNumber = payload.invoice.invoice_number;
             const invoiceAmount = payload.invoice.total_amount;
             const invoiceDate = payload.invoice.created_at.split('T')[0];
 
-            const deliveryMedia = payload.delivery.delivery_media?.[0];
-            if (!deliveryMedia) {
-                throw new Error('No delivery media found in payload.');
-            }
-
             const deliveryUrl = deliveryMedia.presigned_url;
-            const deliveryFileName = new URL(deliveryUrl).pathname.split('/').pop() || 'delivery.pdf';
+            const getFileNameWithExtension = (url: string, defaultExt: string = '.pdf') => {
+                const pathname = new URL(url).pathname;
+                const fileName = pathname.split('/').pop() || 'document';
+                const hasExtension = /\.[a-zA-Z0-9]+$/.test(fileName);
+                return hasExtension ? fileName : `${fileName}${defaultExt}`;
+            };
+
+            const invoiceFileName = getFileNameWithExtension(invoiceUrl);
+            const deliveryFileName = getFileNameWithExtension(deliveryUrl);
+
             const quantityKg = parseFloat(payload.delivery.quantity);
             const quantityMt = quantityKg / 1000;
-
-            const invoiceFileName = new URL(invoiceUrl).pathname.split('/').pop() || 'invoice.pdf';
 
             const [invoicePath, deliveryPath] = await Promise.all([
                 apiService.downloadFile(invoiceUrl, invoiceFileName),
