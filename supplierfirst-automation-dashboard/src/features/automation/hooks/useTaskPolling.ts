@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { taskApi } from '../services/taskApi';
 import { TaskData, LookupData } from '../types/automation.types';
+import { getFriendlyErrorMessage } from '../utils/errorUtils';
+
+
 
 export const useTaskPolling = (taskId: number) => {
     const [task, setTask] = useState<TaskData | null>(null);
@@ -14,7 +17,6 @@ export const useTaskPolling = (taskId: number) => {
             setLookupData(data);
         } catch (err) {
             console.error('Error fetching lookup data:', err);
-            // We don't block the UI if just lookup data fails, but Log it
         }
     }, []);
 
@@ -24,10 +26,10 @@ export const useTaskPolling = (taskId: number) => {
             setTask(data);
             setError(null);
         } catch (err: any) {
-            const msg = err?.response?.data?.message || err?.message || 'Failed to fetch task status';
+            const msg = getFriendlyErrorMessage(err);
             setError(msg);
         } finally {
-            setLoading(false); // Always stop loading after first attempt, success or failure
+            setLoading(false);
         }
     }, [taskId]);
 
@@ -42,12 +44,11 @@ export const useTaskPolling = (taskId: number) => {
     const submitOtp = async (otp: string) => {
         try {
             await taskApi.updateTaskOtp(taskId, otp);
-            // Optimistically update local state or wait for next poll
             if (task) {
-                setTask({ ...task, status: 1298 }); // 1298 is otp_provided
+                setTask({ ...task, status: 1298 });
             }
         } catch (err) {
-            setError('Failed to submit OTP');
+            setError(getFriendlyErrorMessage(err));
             throw err;
         }
     };
