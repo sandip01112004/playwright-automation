@@ -51,12 +51,12 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page }) => {
                 throw new Error('Invoice or Delivery data missing in trigger payload.');
             }
 
-            console.log(`[Automation] Invoice URL: ${payload.invoice.presigned_url}`);
+
             const deliveryMedia = payload.delivery.delivery_media?.[0];
             if (!deliveryMedia) {
                 throw new Error('No delivery media found in payload.');
             }
-            console.log(`[Automation] Delivery URL: ${deliveryMedia.presigned_url}`);
+
 
             const invoiceUrl = payload.invoice.presigned_url;
             const invoiceNumber = payload.invoice.invoice_number;

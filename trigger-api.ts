@@ -67,19 +67,27 @@ app.post('/api/trigger', (req: Request, res: Response) => {
     const payloadString = JSON.stringify(payload);
     const encodedPayload = Buffer.from(payloadString).toString('base64');
 
+    // Capture token from Authorization header or from payload body
+    const authHeader = req.headers.authorization;
+    const incomingToken = authHeader?.startsWith('Bearer ')
+        ? authHeader.substring(7)
+        : (payload.external_api_token || payload.api_token);
+
     console.log(`[Worker] Spawning Playwright process for Task ${task_id}...`);
-    console.log(`[Worker] Payload size (encoded): ${encodedPayload.length} chars`);
+    if (incomingToken) {
+        console.log(`[Worker] Using dynamic token found in trigger request.`);
+    }
 
     // Run ONLY the create-shipment test by default
     const pwArgs = ['playwright', 'test', 'tests/create-shipment.spec.ts', '--project=chromium', '--headed'];
-
-    console.log(`[Worker] Running: npx ${pwArgs.join(' ')}`);
 
     const pwProcess = spawn('npx', pwArgs, {
         env: {
             ...process.env,
             TASK_ID: task_id.toString(),
-            TASK_PAYLOAD: encodedPayload // The full data packet
+            TASK_PAYLOAD: encodedPayload,
+            // Override EXTERNAL_API_TOKEN with the one from the trigger request if provided
+            EXTERNAL_API_TOKEN: incomingToken || process.env.EXTERNAL_API_TOKEN
         },
         shell: true
     });

@@ -14,7 +14,7 @@ export class ExternalApiService {
      * @param targetFolder The local folder to save the file in (defaults to 'data/docs')
      */
     async downloadFile(url: string, fileName: string, targetFolder: string = 'data/docs') {
-        console.log(`[ExternalApiService] Downloading: ${fileName} from ${url.substring(0, 50)}...`);
+        console.log(`[ExternalApiService] Downloading: ${fileName}...`);
 
         // Ensure the target directory exists
         const absoluteFolderPath = path.resolve(process.cwd(), targetFolder);

@@ -33,7 +33,7 @@ export class DashboardPage {
             try {
                 const popup = this.closePopupButton.first();
                 // Wait up to 5 seconds for the popup close button to be visible
-                await popup.waitFor({ state: 'visible', timeout: 3000 });
+                await popup.waitFor({ state: 'visible', timeout: 5000 });
                 console.log(`Closing dashboard popup ${i + 1}...`);
                 await popup.click();
                 // Ensure it's hidden before continuing/finishing
