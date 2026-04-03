@@ -18,12 +18,12 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload 
     try {
 
         // Clear docs folder to ensure we're using fresh files
-        const docsDir = path.resolve(process.cwd(), 'data/docs');
+        const docsDir = path.resolve(process.cwd(), 'da ta/docs');
         if (fs.existsSync(docsDir)) {
             fs.readdirSync(docsDir).forEach(file => fs.unlinkSync(path.join(docsDir, file)));
         }
 
-        // Handle Post-Login Setup
+        // Handle Post-Login Setup 
         await dashboardPage.handlePostLoginSetup();
 
         await test.step('Step 1: Find Order by Order ID', async () => {
@@ -92,13 +92,13 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload 
         });
 
         // Step 3: Report Completion
-        await automationService.updateTaskStatus(1299); // completed
+        await automationService.updateTaskStatus('completed'); // completed
         console.log(`[Automation] Task ${taskId} completed successfully.`);
 
     } catch (err: any) {
         console.error(`\n--- Automation Failed: ${err.message} ---`);
         // Report Failure to your API
-        await automationService.updateTaskStatus(1300, { error_message: err.message });
+        await automationService.updateTaskStatus('failed', { error_message: err.message });
         throw err; // Ensure Playwright marks the test as failed
     } finally {
         // Clear docs folder after test completion (Industrial Standard: Keep environment clean)

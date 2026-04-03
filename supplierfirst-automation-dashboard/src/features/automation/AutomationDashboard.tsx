@@ -11,7 +11,7 @@ const AutomationDashboard: React.FC = () => {
     const queryParams = new URLSearchParams(window.location.search);
     const taskId = parseInt(queryParams.get('taskId') || '1', 10);
 
-    const { task, loading, error, submitOtp } = useTaskPolling(taskId);
+    const { task, lookupData, loading, error, submitOtp } = useTaskPolling(taskId);
 
     if (loading && !task) {
         return (
@@ -32,28 +32,32 @@ const AutomationDashboard: React.FC = () => {
     const renderContent = () => {
         if (!task) return <LoadingScreen message="Fetching task details..." />;
 
-        const status = Number(task.status);
-        switch (status) {
-            case 1296: // processing
-            case 1298: // otp_provided
-                return <LoadingScreen message={
-                    (status === 1298)
-                        ? 'OTP Submitted. Resuming automation...'
-                        : 'Automating SupplierFirst...'
-                } />;
+        const statusId = Number(task.status);
 
-            case 1297: // awaiting_otp
-                return <OtpInputScreen onSubmit={submitOtp} />;
+        // Helper to check status by string key
+        const isStatus = (key: string) => lookupData.some((l: any) => (l.value === key || l.name === key) && l.id === statusId);
 
-            case 1299: // completed
-                return <SuccessScreen />;
-
-            case 1300: // failed
-                return <ErrorScreen message={task.error_message ?? undefined} />;
-
-            default:
-                return <LoadingScreen message="Unknown state. Re-syncing..." />;
+        if (isStatus('processing') || isStatus('otp_provided')) {
+            return <LoadingScreen message={
+                isStatus('otp_provided')
+                    ? 'OTP Submitted. Resuming automation...'
+                    : 'Automating SupplierFirst...'
+            } />;
         }
+
+        if (isStatus('awaiting_otp')) {
+            return <OtpInputScreen onSubmit={submitOtp} />;
+        }
+
+        if (isStatus('completed')) {
+            return <SuccessScreen />;
+        }
+
+        if (isStatus('failed')) {
+            return <ErrorScreen message={task.error_message ?? undefined} />;
+        }
+
+        return <LoadingScreen message="Unknown state. Re-syncing..." />;
     };
 
     return (

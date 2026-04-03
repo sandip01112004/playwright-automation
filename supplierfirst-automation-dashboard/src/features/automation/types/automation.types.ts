@@ -1,10 +1,11 @@
 export type AutomationStatus =
     | 'idle'
-    | 1296 // processing
-    | 1297 // awaiting_otp
-    | 1298 // otp_provided
-    | 1299 // completed
-    | 1300; // failed
+    | 'processing'
+    | 'awaiting_otp'
+    | 'otp_provided'
+    | 'completed'
+    | 'failed'
+    | number;
 
 export interface TaskData {
     id: number;

@@ -8,7 +8,6 @@ import path from 'path';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.TRIGGER_API_PORT || 3001;
 
 app.use(express.json());
 
@@ -33,20 +32,18 @@ app.use((err: any, req: Request, res: Response, next: any) => {
 app.post('/api/trigger', (req: Request, res: Response) => {
     const payload = req.body;
 
-    // Support both snake_case and camelCase for Task ID
-    const task_id = payload.task_id || payload.taskId;
+    const task_id = payload.task_id;
 
     if (!task_id) {
-        console.error(`[API] Rejecting request: Missing task_id in payload:`, JSON.stringify(payload));
+        console.error(`[API] Rejecting request: Missing task_id in payload.`);
         return res.status(400).json({
-            error: 'Missing task_id or taskId in payload.'
+            error: 'Missing task_id in payload.'
         });
     }
 
     console.log(`\n************************************************`);
     console.log(`[API] TRIGGER RECEIVED FOR TASK ID: ${task_id}`);
     console.log(`[API] URL Base: ${process.env.BFC_API_URL}`);
-    console.log(`[API] Full Payload:`, JSON.stringify(payload, null, 2));
     console.log(`************************************************\n`);
 
     // 1. Respond to BFC immediately
@@ -112,6 +109,7 @@ app.post('/api/trigger', (req: Request, res: Response) => {
 /**
  * START THE API SERVER
  */
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log(`\n================================================`);
     console.log(`Automation Trigger API Running`);

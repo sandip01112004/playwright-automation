@@ -23,7 +23,7 @@ const OtpInputScreen: React.FC<OtpInputScreenProps> = ({ onSubmit }) => {
         <div className="glass-card">
             <div className="status-badge await">Action Required</div>
             <h2>Enter OTP</h2>
-            <p>Please enter the verification code sent to the supplier portal.</p>
+            <p>Please enter the verification code sent from the supplierfirst portal.</p>
             <form onSubmit={handleSubmit} className="otp-form">
                 <input
                     type="text"

@@ -8,6 +8,7 @@ export class AutomationService {
     private taskId: number;
     private baseUrl: string;
     private headers: any;
+    private lookupCache: { [key: string]: number } = {};
     public payload: any = null;
 
     constructor(taskId: number, baseUrl: string = config.BFC_API_URL) {
@@ -29,6 +30,48 @@ export class AutomationService {
             }
         }
     }
+
+    /**
+     * Fetch lookup data for a specific category and cache it.
+     */
+    async loadLookupData(category: string = 'automation_status'): Promise<void> {
+        if (Object.keys(this.lookupCache).length > 0) return;
+
+        try {
+            const url = `${this.baseUrl}/reference/lookupdata/?category=${category}`;
+            console.log(`[AutomationService] Fetching lookup data from: ${url}`);
+            const response = await axios.get(url, { headers: this.headers });
+
+            // Extract items based on known response patterns
+            const items = response.data.data?.data || response.data.data || (Array.isArray(response.data) ? response.data : []);
+
+            if (items.length === 0) {
+                console.warn(`[AutomationService] No items found in lookup data response for ${category}. Raw Body: ${JSON.stringify(response.data).substring(0, 200)}`);
+            }
+
+            items.forEach((item: any) => {
+                const id = item.id;
+                // Capture all possible identifier strings
+                const keys = [item.value, item.name, item.display_name].filter(k => typeof k === 'string' && k.length > 0);
+
+                keys.forEach(k => {
+                    const normalized = k.toLowerCase();
+                    this.lookupCache[normalized] = Number(id);
+                    // Also support underscores instead of spaces
+                    this.lookupCache[normalized.replace(/\s+/g, '_')] = Number(id);
+                });
+            });
+
+            console.log(`[AutomationService] Loaded ${Object.keys(this.lookupCache).length} lookup entries for ${category}: ${Object.keys(this.lookupCache).join(', ')}`);
+        } catch (err: any) {
+            console.error(`[AutomationService] Failed to load lookup data: ${err.message}`);
+            if (err.response) {
+                console.error(`[AutomationService] Lookup Error Details: ${JSON.stringify(err.response.data).substring(0, 200)}`);
+            }
+            throw new Error(`Critical: Failed to load ${category} mapping. Automation cannot proceed.`);
+        }
+    }
+
     /**
      * Fetch the task object from the backend
      */
@@ -55,21 +98,28 @@ export class AutomationService {
     }
 
     /**
-     * Update task status (e.g., 'awaiting_otp', 'completed', 'failed')
+     * Update task status using a string key (e.g., 'processing', 'completed')
+     * The key is mapped to a numeric ID using the lookup API.
      */
-    async updateTaskStatus(status: number, extra: { otp?: string; error_message?: string } = {}) {
-        console.log(`[AutomationService] Updating Task ${this.taskId} status to: ${status}`);
-        const payload: any = { status, ...extra };
+    async updateTaskStatus(statusKey: string, extra: { otp?: string; error_message?: string } = {}) {
+        await this.loadLookupData();
 
-        // If status is 1296 (Processing), explicitly clear old data
-        if (status === 1296) {
+        const statusId = this.lookupCache[statusKey.toLowerCase()];
+        if (!statusId) {
+            console.error(`[AutomationService] Invalid status key: "${statusKey}". Available: ${Object.keys(this.lookupCache).join(', ')}`);
+            throw new Error(`Invalid status key: ${statusKey}`);
+        }
+
+        console.log(`[AutomationService] Updating Task ${this.taskId} status: "${statusKey}" -> ${statusId}`);
+        const payload: any = { status: statusId, ...extra };
+
+        // If status is 'processing', explicitly clear old data
+        if (statusId === this.lookupCache['processing']) {
             payload.otp = '';
             payload.error_message = '';
         }
 
         const url = `${this.baseUrl}/automation_task/${this.taskId}/`;
-        console.log(`>>> [DEBUG] PATCHING TASK STATUS TO: ${url}`);
-        console.log(`>>> [DEBUG] WITH TOKEN: ${this.headers['Authorization'] ? (this.headers['Authorization'].substring(0, 15) + '...') : 'Missing'}`);
         try {
             const response = await axios.patch(url, payload, {
                 headers: this.headers
@@ -88,9 +138,12 @@ export class AutomationService {
      * Poll until the user has provided an OTP in the dashboard
      */
     async waitForOtp(timeoutMs: number = 0) {
+        await this.loadLookupData();
+        const otpProvidedId = this.lookupCache['otp_provided'];
+
         return this.pollTaskField<string>(
             'otp',
-            (data) => data.otp && (Number(data.status) === 1298),
+            (data) => data.otp && (Number(data.status) === otpProvidedId),
             timeoutMs
         );
     }

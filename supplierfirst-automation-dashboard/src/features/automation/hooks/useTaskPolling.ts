@@ -41,10 +41,13 @@ export const useTaskPolling = (taskId: number) => {
 
     const submitOtp = async (otp: string) => {
         try {
-            await taskApi.updateTaskOtp(taskId, otp);
-            // Optimistically update local state or wait for next poll
+            await taskApi.updateTaskOtp(taskId, otp, 'otp_provided');
+            // Optimistically update local state using the helper to get the ID
             if (task) {
-                setTask({ ...task, status: 1298 }); // 1298 is otp_provided
+                const statusId = taskApi.getStatusId('otp_provided');
+                if (statusId) {
+                    setTask({ ...task, status: statusId });
+                }
             }
         } catch (err) {
             setError('Failed to submit OTP');

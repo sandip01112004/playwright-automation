@@ -11,6 +11,8 @@ const authHeaders = {
     'Accept': 'application/json',
 };
 
+const lookupCache: { [key: string]: number } = {};
+
 export const taskApi = {
     getLookupData: async (category: string): Promise<LookupData[]> => {
         const url = `${API_BASE_URL}/reference/lookupdata/?category=${category}`;
@@ -18,7 +20,21 @@ export const taskApi = {
             const response = await axios.get(url, {
                 headers: authHeaders,
             });
-            return response.data.data?.data || response.data.data || response.data;
+            const data = response.data.data?.data || response.data.data || response.data;
+
+            // Cache automation status for later use
+            if (category === 'automation_status' && Array.isArray(data)) {
+                data.forEach((item: LookupData) => {
+                    const id = item.id;
+                    const keys = [item.value, item.name].filter(k => typeof k === 'string' && k.length > 0);
+
+                    keys.forEach(k => {
+                        lookupCache[k.toLowerCase()] = id;
+                    });
+                });
+            }
+
+            return data;
         } catch (error: any) {
             console.error(`[taskApi] getLookupData failed for ${url}:`, error.response?.status, error.response?.data || error.message);
             throw error;
@@ -38,14 +54,28 @@ export const taskApi = {
         }
     },
 
-    updateTaskOtp: async (taskId: number, otp: string): Promise<TaskData> => {
+    updateTaskOtp: async (taskId: number, otp: string, statusKey: string = 'otp_provided'): Promise<TaskData> => {
+        const statusId = lookupCache[statusKey.toLowerCase()];
+
+        if (!statusId) {
+            console.error(`[taskApi] Status key "${statusKey}" not found in cache. Available:`, Object.keys(lookupCache));
+            throw new Error(`Invalid status key: ${statusKey}`);
+        }
+
         const response = await axios.patch(`${API_BASE_URL}/automation_task/${taskId}/`, {
             otp,
-            status: 1298 // otp_provided 
+            status: statusId
         }, {
             headers: authHeaders,
         });
         return response.data.data || response.data;
+    },
+
+    /**
+     * Helper to get a status ID from a string key (if cached)
+     */
+    getStatusId: (key: string): number | undefined => {
+        return lookupCache[key.toLowerCase()];
     }
 };
 
