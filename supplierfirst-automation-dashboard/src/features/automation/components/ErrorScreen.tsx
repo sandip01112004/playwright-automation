@@ -17,11 +17,7 @@ const ErrorScreen: React.FC<ErrorScreenProps> = ({ message, scn }) => {
                     <div className="scn-value">{scn}</div>
                 </div>
             )}
-            <div className="otp-form" style={{ marginTop: '24px' }}>
-                <button type="button" onClick={() => window.location.reload()}>
-                    Restart Process
-                </button>
-            </div>
+
         </div>
     );
 };
