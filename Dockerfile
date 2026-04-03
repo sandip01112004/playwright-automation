@@ -1,24 +1,26 @@
 # Use the official Playwright image as the base
 FROM mcr.microsoft.com/playwright:v1.58.2-jammy
-
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy package.json and package-lock.json to the container
+# 1. Install root dependencies (API & Automation)
 COPY package*.json ./
-
-# Install project dependencies
 RUN npm install
 
-# Copy the rest of the application code
+# 2. Install dashboard dependencies
+# Copy only package files first to optimize layer caching
+COPY supplierfirst-automation-dashboard/package*.json ./supplierfirst-automation-dashboard/
+RUN cd supplierfirst-automation-dashboard && npm install
+
+# 3. Copy the rest of the application code
 COPY . .
 
-# Expose the dashboard port
-EXPOSE 5000
+# 4. Expose the dashboard (3000) and the API (3001)
+EXPOSE 3000 3001
 
-# Set environment variables (can be overridden at runtime)
-# Defaulting to headless true for Docker
+# 5. Set environment variables
 ENV HEADLESS=true
+ENV PORT=3001
+ENV REACT_APP_API_BASE_URL=http://localhost:3001/api/v1
 
-# Start the remote dashboard
-CMD ["node", "remote-dashboard.js"]
+# 6. Start both processes concurrently
+CMD ["npm", "run", "start:all"]

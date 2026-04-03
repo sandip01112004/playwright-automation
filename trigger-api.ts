@@ -68,7 +68,7 @@ app.post('/api/trigger', (req: Request, res: Response) => {
     }
 
     // Run ONLY the create-shipment test by default
-    const pwArgs = ['playwright', 'test', 'tests/create-shipment.spec.ts', '--project=chromium', '--headed'];
+    const pwArgs = ['playwright', 'test', 'tests/create-shipment.spec.ts', '--project=chromium'];
 
     const pwProcess = spawn('npx', pwArgs, {
         env: {

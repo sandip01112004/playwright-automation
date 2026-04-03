@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start:api": "ts-node trigger-api.ts"
+    "start:api": "ts-node trigger-api.ts",
+    "start:all": "concurrently \"npm run start:api\" \"cd supplierfirst-automation-dashboard && PORT=3000 npm start\""
   },
   "keywords": [],
   "author": "",
@@ -20,6 +21,7 @@
   },
   "dependencies": {
     "axios": "^1.14.0",
+    "concurrently": "^9.1.2",
     "express": "^5.2.1",
     "readline-sync": "^1.4.10"
   }
