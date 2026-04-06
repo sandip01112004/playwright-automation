@@ -18,7 +18,7 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload 
     try {
 
         // Clear docs folder to ensure we're using fresh files
-        const docsDir = path.resolve(process.cwd(), 'da ta/docs');
+        const docsDir = path.resolve(process.cwd(), 'data/docs');
         if (fs.existsSync(docsDir)) {
             fs.readdirSync(docsDir).forEach(file => fs.unlinkSync(path.join(docsDir, file)));
         }

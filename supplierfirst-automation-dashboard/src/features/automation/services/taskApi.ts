@@ -5,10 +5,21 @@ import { TaskData, LookupData } from '../types/automation.types';
 const API_BASE_URL = (process.env.REACT_APP_biofuelcircle_API_BASE_URL || 'https://api-dev-next.biofuelcircle.com/api/v1').replace(/\/$/, '');
 const API_TOKEN = process.env.REACT_APP_biofuelcircle_API_TOKEN || '';
 
-const authHeaders = {
-    'Authorization': `Bearer ${API_TOKEN}`,
+// Diagnostic check (can be removed once debugged)
+console.log('[taskApi] Configuration:', {
+    baseUrl: API_BASE_URL,
+    hasToken: !!API_TOKEN,
+    tokenPrefix: API_TOKEN ? API_TOKEN.substring(0, 10) + '...' : 'none'
+});
+
+const commonHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
+};
+
+const authHeaders = {
+    ...commonHeaders,
+    'Authorization': `Bearer ${API_TOKEN}`,
 };
 
 const lookupCache: { [key: string]: number } = {};
@@ -18,7 +29,7 @@ export const taskApi = {
         const url = `${API_BASE_URL}/reference/lookupdata/?category=${category}`;
         try {
             const response = await axios.get(url, {
-                headers: authHeaders,
+                headers: commonHeaders, // Public endpoint
             });
             const data = response.data.data?.data || response.data.data || response.data;
 
