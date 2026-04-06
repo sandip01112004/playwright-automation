@@ -5,13 +5,6 @@ import { TaskData, LookupData } from '../types/automation.types';
 const API_BASE_URL = (process.env.REACT_APP_biofuelcircle_API_BASE_URL || 'https://api-dev-next.biofuelcircle.com/api/v1').replace(/\/$/, '');
 const API_TOKEN = process.env.REACT_APP_biofuelcircle_API_TOKEN || '';
 
-// Diagnostic check (can be removed once debugged)
-console.log('[taskApi] Configuration:', {
-    baseUrl: API_BASE_URL,
-    hasToken: !!API_TOKEN,
-    tokenPrefix: API_TOKEN ? API_TOKEN.substring(0, 10) + '...' : 'none'
-});
-
 const commonHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -87,6 +80,22 @@ export const taskApi = {
      */
     getStatusId: (key: string): number | undefined => {
         return lookupCache[key.toLowerCase()];
+    },
+
+    /**
+     * Fetch real-time automation logs from the Trigger API
+     */
+    getTaskLogs: async (taskId: number): Promise<string[]> => {
+        // We assume the trigger API is reachable at this relative or absolute URL
+        // In local dev, it's typically http://localhost:3001
+        const TRIGGER_API_URL = process.env.REACT_APP_TRIGGER_API_URL || 'http://localhost:3001';
+        try {
+            const response = await axios.get(`${TRIGGER_API_URL}/api/logs/${taskId}`);
+            return response.data.logs || [];
+        } catch (error) {
+            // Silently fail log fetching to avoid disrupting main status polling
+            return [];
+        }
     }
 };
 

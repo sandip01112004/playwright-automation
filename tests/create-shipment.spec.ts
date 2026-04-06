@@ -8,6 +8,7 @@ import * as path from 'path';
 
 test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload }) => {
     const taskId = payload.task_id || 1; // Default to task ID 1 as requested
+    console.log(`[Test] Starting Full Shipment Creation for Task ID: ${taskId}`);
     const automationService = new AutomationService(taskId);
 
     const dashboardPage = new DashboardPage(page);
@@ -24,7 +25,9 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload 
         }
 
         // Handle Post-Login Setup 
+        console.log('[Test] Entering handlePostLoginSetup...');
         await dashboardPage.handlePostLoginSetup();
+        console.log('[Test] handlePostLoginSetup complete.');
 
         await test.step('Step 1: Find Order by Order ID', async () => {
             await dashboardPage.navigateToOrdersInProcess();
@@ -36,11 +39,12 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload 
                 throw new Error('Missing "order_id" in trigger payload. Please provide it to start searching.');
             }
 
-            console.log(`[Automation] Processing Order ID: ${orderId}`);
+            console.log(`[Step 1] Searching for Order ID: ${orderId}`);
             await dashboardPage.performSearch(orderId.toString());
         });
 
         await test.step('Step 2: Create Shipment and Complete Form', async () => {
+            console.log('[Step 2] Found Order. Opening Create Shipment menu...');
             await dashboardPage.openShipmentMenu();
             await dashboardPage.selectCreateShipment();
 
@@ -73,6 +77,10 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload 
             const invoiceFileName = getFileNameWithExtension(invoiceUrl);
             const deliveryFileName = getFileNameWithExtension(deliveryUrl);
 
+            console.log(`[Step 2] Downloading Documents:
+   - Invoice: ${invoiceFileName}
+   - Delivery: ${deliveryFileName}`);
+
             const quantityKg = parseFloat(payload.delivery.quantity);
             const quantityMt = quantityKg / 1000;
 
@@ -81,6 +89,7 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload 
                 fileService.downloadFile(deliveryUrl, deliveryFileName)
             ]);
 
+            console.log('[Step 2] Filling out the shipment form details...');
             await shipmentFormPage.completeShipmentForm({
                 invoicePath: invoicePath,
                 invoiceNumber: invoiceNumber,
@@ -92,8 +101,9 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload 
         });
 
         // Step 3: Report Completion
+        console.log('[Step 3] Submitting task completion status: completed');
         await automationService.updateTaskStatus('completed'); // completed
-        console.log(`[Automation] Task ${taskId} completed successfully.`);
+        console.log(`[Test] Task ${taskId} finished successfully.`);
 
     } catch (err: any) {
         console.error(`\n--- Automation Failed: ${err.message} ---`);

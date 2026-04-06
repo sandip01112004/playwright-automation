@@ -75,9 +75,12 @@ export class ShipmentFormPage {
     //--- Section 1: Supplier Invoice ---
 
     async fillSupplierInvoiceSection(filePath: string, invoiceNumber: string, date: string, amount: number | string) {
+        console.log('[Section 1] Filling Supplier Invoice Details...');
         // Initial upload
         await this.page.waitForURL('**/asn/asnform', { timeout: 15000 }).catch(() => { });
         await this.uploadInput.waitFor({ state: 'attached', timeout: 30000 });
+
+        console.log('[Section 1] Uploading Invoice file...');
         await this.uploadInput.setInputFiles(filePath);
 
         // Dispatch events to ensure UI/framework detects the change
@@ -112,6 +115,7 @@ export class ShipmentFormPage {
 
     // --- Section 2: Supporting Documents ---
     async fillSupportingDocumentsSection(deliveryDetailsPath?: string) {
+        console.log('[Section 2] Filling Supporting Document Details...');
         await this.supportedDocumentsAccordion.click();
 
         if (deliveryDetailsPath) {
@@ -128,6 +132,7 @@ export class ShipmentFormPage {
 
     //--- Section 3: Item Details ---
     async fillItemDetailsSection(quantityMt?: number | string) {
+        console.log('[Section 3] Filling Item Details and Quantity...');
         await this.itemDetailsAccordion.click();
 
         await this.addItemsButton.click();
@@ -152,6 +157,7 @@ export class ShipmentFormPage {
 
     //--- Section 4: Transportation Details ---
     async fillTransportationSection(transporterName: string = 'Bfcsupply') {
+        console.log('[Section 4] Filling Transport and Arrival Details...');
         await this.transportDetailsAccordion.click();
 
         await this.transportModeDropdown.scrollIntoViewIfNeeded();
@@ -186,5 +192,6 @@ export class ShipmentFormPage {
         await this.fillSupportingDocumentsSection(details.deliveryDetailsPath);
         await this.fillItemDetailsSection(details.quantityMt);
         await this.fillTransportationSection(details.transporterName);
+        console.log('[Form] Shipment form orchestration completed.');
     }
 }

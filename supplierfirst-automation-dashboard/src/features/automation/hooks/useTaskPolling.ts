@@ -8,6 +8,7 @@ import { getFriendlyErrorMessage } from '../utils/errorUtils';
 export const useTaskPolling = (taskId: number) => {
     const [task, setTask] = useState<TaskData | null>(null);
     const [lookupData, setLookupData] = useState<LookupData[]>([]);
+    const [logs, setLogs] = useState<string[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -25,13 +26,24 @@ export const useTaskPolling = (taskId: number) => {
             const data = await taskApi.getTaskStatus(taskId);
             setTask(data);
             setError(null);
+
+            // Also fetch logs if in processing, awaiting_otp, or failed state
+            const statusId = Number(data.status);
+            const isLogsNeeded = lookupData.some((l: any) =>
+                ['processing', 'awaiting_otp', 'otp_provided', 'failed', 'completed'].includes(l.value || l.name) && l.id === statusId
+            );
+
+            if (isLogsNeeded || true) { // Default to fetching for visibility
+                const newLogs = await taskApi.getTaskLogs(taskId);
+                if (newLogs.length > 0) setLogs(newLogs);
+            }
         } catch (err: any) {
             const msg = getFriendlyErrorMessage(err);
             setError(msg);
         } finally {
             setLoading(false);
         }
-    }, [taskId]);
+    }, [taskId, lookupData]);
 
     useEffect(() => {
         fetchInitialData();
@@ -57,5 +69,5 @@ export const useTaskPolling = (taskId: number) => {
         }
     };
 
-    return { task, lookupData, loading, error, submitOtp };
+    return { task, lookupData, logs, loading, error, submitOtp };
 };

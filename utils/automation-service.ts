@@ -39,7 +39,6 @@ export class AutomationService {
 
         try {
             const url = `${this.baseUrl}/reference/lookupdata/?category=${category}`;
-            console.log(`[AutomationService] Fetching lookup data from: ${url}`);
             const response = await axios.get(url, { headers: this.headers });
 
             // Extract items based on known response patterns
@@ -62,7 +61,7 @@ export class AutomationService {
                 });
             });
 
-            console.log(`[AutomationService] Loaded ${Object.keys(this.lookupCache).length} lookup entries for ${category}: ${Object.keys(this.lookupCache).join(', ')}`);
+            // console.log(`[AutomationService] Loaded ${Object.keys(this.lookupCache).length} lookup entries for ${category}: ${Object.keys(this.lookupCache).join(', ')}`);
         } catch (err: any) {
             console.error(`[AutomationService] Failed to load lookup data: ${err.message}`);
             if (err.response) {
@@ -83,7 +82,7 @@ export class AutomationService {
                 headers: this.headers
             });
             const data = response.data.data || response.data;
-            console.log(`[AutomationService] Task ${this.taskId} data fetched successfully.`);
+            // console.log(`[AutomationService] Task ${this.taskId} data fetched successfully.`);
 
             if (data.payload) {
                 this.payload = data.payload;
@@ -110,7 +109,7 @@ export class AutomationService {
             throw new Error(`Invalid status key: ${statusKey}`);
         }
 
-        console.log(`[AutomationService] Updating Task ${this.taskId} status: "${statusKey}" -> ${statusId}`);
+        console.log(`[Service] Updating Task ${this.taskId} status: "${statusKey}"`);
         const payload: any = { status: statusId, ...extra };
 
         // If status is 'processing', explicitly clear old data
@@ -181,7 +180,7 @@ export class AutomationService {
         const baseUrl = (process.env.BFC_API_URL || 'https://api-dev-next.biofuelcircle.com/api/v1').replace(/\/$/, '');
         const url = `${baseUrl}/automation_token/?target_system=${targetSystem}&username=${encodeURIComponent(username)}`;
         try {
-            console.log(`[AutomationService] Fetching Automation Token from: ${url}`);
+            // console.log(`[Service] Fetching Automation Token from: ${url}`);
             const response = await axios.get(url, {
                 headers: {
                     'Authorization': `Bearer ${config.BFC_API_TOKEN}`,
@@ -215,7 +214,7 @@ export class AutomationService {
         const start = Date.now();
         let attempts = 0;
 
-        console.log(`[AutomationService] Polling for ${fieldName} on Task ${this.taskId}...`);
+        console.log(`[Service] Waiting for ${fieldName} input from dashboard on Task ${this.taskId}...`);
         while (timeoutMs === 0 || Date.now() - start < timeoutMs) {
             try {
                 const url = `${this.baseUrl}/automation_task/${this.taskId}/`;

@@ -8,7 +8,6 @@ import * as path from 'path';
 export class FileService {
 
     async downloadFile(url: string, fileName: string, targetFolder: string = 'data/docs') {
-        console.log(`[FileService] Downloading: ${fileName}...`);
 
         // Ensure the target directory exists
         const absoluteFolderPath = path.resolve(process.cwd(), targetFolder);
@@ -21,7 +20,7 @@ export class FileService {
         try {
             const response = await axios.get(url, { responseType: 'arraybuffer' });
             fs.writeFileSync(filePath, response.data);
-            console.log(`[FileService] Successfully saved to: ${filePath}`);
+            console.log(`[Step 2] Downloaded: ${fileName}`);
             return filePath;
         } catch (error: any) {
             const status = error.response?.status || 'Unknown';

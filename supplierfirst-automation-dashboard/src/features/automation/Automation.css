@@ -179,3 +179,72 @@
         transform: rotate(360deg);
     }
 }
+
+/* Log Terminal Styles */
+.log-terminal {
+    margin-top: 30px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+    text-align: left;
+    max-width: 600px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.log-header {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 8px 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.5);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.log-body {
+    padding: 12px;
+    height: 200px;
+    overflow-y: auto;
+    font-family: 'Monaco', 'Consolas', monospace;
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+.log-line {
+    margin-bottom: 4px;
+    white-space: pre-wrap;
+    display: flex;
+}
+
+.log-timestamp {
+    color: rgba(255, 255, 255, 0.2);
+    margin-right: 10px;
+    flex-shrink: 0;
+    font-size: 0.7rem;
+}
+
+.log-text {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* Custom Scrollbar for Logs */
+.log-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.log-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.log-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.log-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}

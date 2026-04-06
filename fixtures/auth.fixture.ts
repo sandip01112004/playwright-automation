@@ -71,6 +71,7 @@ export const test = base.extend<{ page: Page, payload: AutomationPayload }>({
 
         // 1. Initialize Task Status
         await test.step('Initialize Task Status', async () => {
+            console.log(`[Auth] Initializing Task ${taskId} status to 'processing'...`);
             await automationService.updateTaskStatus('processing').catch(err => {
                 console.error(`[Auth] Failed to reset task status: ${err.message}`);
             });
@@ -93,13 +94,14 @@ export const test = base.extend<{ page: Page, payload: AutomationPayload }>({
             }
 
             if (isLoginRequired) {
-                console.log(`[Auth] Session expired or missing. Launching internal login flow...`);
+                console.log(`[Auth] Session expired or invalid. Performing automated login...`);
                 await test.step('Unified Login Flow', async () => {
                     await performFullLogin(page, automationService);
                 });
 
                 // Sync and re-inject fresh tokens
                 config.refresh();
+                console.log(`[Auth] Login successful. Re-injecting fresh session tokens...`);
                 await injectTokensAndReload(page, baseUrl);
             }
         });

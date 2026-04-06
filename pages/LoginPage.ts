@@ -12,10 +12,12 @@ export class LoginPage {
     }
 
     async navigate() {
+        console.log('[Login] Navigating to Supplier Login page...');
         await this.page.goto('/user/login');
     }
 
     async enterLoginId(supportId: string | number) {
+        console.log(`[Login] Entering Supplier ID: ${supportId} and proceeding...`);
         await this.loginIdInput.fill(supportId.toString());
         await this.loginButton.click();
     }
