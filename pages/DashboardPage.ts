@@ -13,7 +13,7 @@ export class DashboardPage {
     constructor(page: Page) {
         this.page = page;
         this.closePopupButton = page.locator("//em[@class='bi bi-x']");
-        this.ordersTab = page.locator('span, div, a').filter({ hasText: /^Orders$/i });
+        this.ordersTab = page.getByText('Orders', { exact: true });
         this.ordersInProcessButton = page.getByRole('button', { name: /Orders In Process/i });
         this.searchInput = page.getByRole('textbox', { name: 'Search by Order Number, ARC No.' });
         this.menuIcon = page.locator('order-card:visible').locator('em.bi.bi-three-dots.pointer.secondary-font');
