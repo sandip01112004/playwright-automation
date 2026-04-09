@@ -16,33 +16,42 @@ const authHeaders = {
 };
 
 const lookupCache: { [key: string]: number } = {};
+const lookupDataPromiseCache: Record<string, Promise<LookupData[]> | undefined> = {};
 
 export const taskApi = {
-    getLookupData: async (category: string): Promise<LookupData[]> => {
-        const url = `${API_BASE_URL}/reference/lookupdata/?category=${category}`;
-        try {
-            const response = await axios.get(url, {
-                headers: commonHeaders, // Public endpoint
-            });
-            const data = response.data.data?.data || response.data.data || response.data;
-
-            // Cache automation status for later use
-            if (category === 'automation_status' && Array.isArray(data)) {
-                data.forEach((item: LookupData) => {
-                    const id = item.id;
-                    const keys = [item.value, item.name].filter(k => typeof k === 'string' && k.length > 0);
-
-                    keys.forEach(k => {
-                        lookupCache[k.toLowerCase()] = id;
-                    });
-                });
-            }
-
-            return data;
-        } catch (error: any) {
-            console.error(`[taskApi] getLookupData failed for ${url}:`, error.response?.status, error.response?.data || error.message);
-            throw error;
+    getLookupData: (category: string): Promise<LookupData[]> => {
+        const cachedPromise = lookupDataPromiseCache[category];
+        if (cachedPromise) {
+            return cachedPromise;
         }
+
+        const url = `${API_BASE_URL}/reference/lookupdata/?category=${category}`;
+        
+        const fetchPromise = axios.get(url, { headers: commonHeaders })
+            .then(response => {
+                const data = response.data.data?.data || response.data.data || response.data;
+
+                // Cache automation status mapping for later use
+                if (category === 'automation_status' && Array.isArray(data)) {
+                    data.forEach((item: LookupData) => {
+                        const id = item.id;
+                        const keys = [item.value, item.name].filter(k => typeof k === 'string' && k.length > 0);
+
+                        keys.forEach(k => {
+                            lookupCache[k.toLowerCase()] = id;
+                        });
+                    });
+                }
+                return data;
+            })
+            .catch((error: any) => {
+                console.error(`[taskApi] getLookupData failed for ${url}:`, error.response?.status, error.response?.data || error.message);
+                delete lookupDataPromiseCache[category]; // Remove from cache on failure so we can retry later
+                throw error;
+            });
+
+        lookupDataPromiseCache[category] = fetchPromise;
+        return fetchPromise;
     },
 
     getTaskStatus: async (taskId: number): Promise<TaskData> => {

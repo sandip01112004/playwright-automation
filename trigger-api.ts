@@ -3,12 +3,15 @@ import type { Request, Response } from 'express';
 import { spawn } from 'child_process';
 import * as dotenv from 'dotenv';
 import path from 'path';
+import cors from 'cors';
 
 // Load environment variables (.env in root)
 dotenv.config();
 
 const app = express();
 
+// Allow Cross-Origin requests from the React frontend
+app.use(cors());
 app.use(express.json());
 
 // In-memory log storage

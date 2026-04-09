@@ -21,37 +21,57 @@ export const useTaskPolling = (taskId: number) => {
         }
     }, []);
 
+    const isTerminalStatus = useCallback((status: any) => {
+        if (!status || lookupData.length === 0) return false;
+        const statusId = Number(status);
+        return lookupData.some(l => 
+            ['completed', 'failed'].includes(String(l.value || l.name).toLowerCase()) && l.id === statusId
+        );
+    }, [lookupData]);
+
     const fetchTaskStatus = useCallback(async () => {
         try {
             const data = await taskApi.getTaskStatus(taskId);
             setTask(data);
             setError(null);
-
-            // Also fetch logs if in processing, awaiting_otp, or failed state
-            const statusId = Number(data.status);
-            const isLogsNeeded = lookupData.some((l: any) =>
-                ['processing', 'awaiting_otp', 'otp_provided', 'failed', 'completed'].includes(l.value || l.name) && l.id === statusId
-            );
-
-            if (isLogsNeeded || true) { // Default to fetching for visibility
-                const newLogs = await taskApi.getTaskLogs(taskId);
-                if (newLogs.length > 0) setLogs(newLogs);
-            }
+            return data;
         } catch (err: any) {
             const msg = getFriendlyErrorMessage(err);
             setError(msg);
+            throw err;
         } finally {
             setLoading(false);
         }
-    }, [taskId, lookupData]);
+    }, [taskId]);
 
     useEffect(() => {
         fetchInitialData();
-        fetchTaskStatus();
+    }, [fetchInitialData]);
 
-        const interval = setInterval(fetchTaskStatus, 5000);
+    useEffect(() => {
+        // Only start polling if we have lookup data and it's not already terminal
+        if (lookupData.length === 0) return;
+        if (isTerminalStatus(task?.status)) return;
+
+        // Perform initial fetch
+        fetchTaskStatus().catch(() => {});
+
+        // Set up interval for subsequent fetches
+        const interval = setInterval(async () => {
+            try {
+                const data = await fetchTaskStatus();
+                // Stop polling if we reached a terminal state
+                if (isTerminalStatus(data.status)) {
+                    clearInterval(interval);
+                }
+            } catch (err) {
+                // Keep polling on transient errors, fetchTaskStatus handles error state
+            }
+        }, 5000);
+
         return () => clearInterval(interval);
-    }, [fetchInitialData, fetchTaskStatus]);
+        // Important: We do NOT depend on 'task' here to avoid restarting the interval on every update
+    }, [lookupData, taskId, isTerminalStatus, fetchTaskStatus]);
 
     const submitOtp = async (otp: string) => {
         try {
