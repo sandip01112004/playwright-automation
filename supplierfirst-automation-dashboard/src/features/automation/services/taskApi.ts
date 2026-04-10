@@ -60,6 +60,12 @@ export const taskApi = {
             const response = await axios.get(url, {
                 headers: authHeaders,
             });
+            
+            // Defensive: Check if we got an ngrok error page instead of JSON
+            if (typeof response.data === 'string' && response.data.includes('ngrok')) {
+                throw new Error('Ngrok Tunnel Error: The backend tunnel is inactive or the URL is invalid (ERR_NGROK_6024).');
+            }
+
             return response.data.data || response.data;
         } catch (error: any) {
             console.error(`[taskApi] getTaskStatus failed for ${url}:`, error.response?.status, error.response?.data || error.message);
@@ -92,17 +98,40 @@ export const taskApi = {
     },
 
     /**
+     * Discovery: Fetch the most recently triggered task from the Trigger API
+     */
+    getActiveTask: async (): Promise<{ taskId: string | null; status: string } | null> => {
+        const TRIGGER_API_URL = process.env.REACT_APP_TRIGGER_API_URL || 'http://localhost:3001';
+        const SECRET_KEY = process.env.REACT_APP_SCN_API_SECRET_KEY || '';
+
+        try {
+            const response = await axios.get(`${TRIGGER_API_URL}/api/active-task`, {
+                headers: { 'x-api-key': SECRET_KEY }
+            });
+            return response.data;
+        } catch (error) {
+            return null;
+        }
+    },
+
+    /**
      * Fetch real-time automation logs from the Trigger API
      */
     getTaskLogs: async (taskId: number): Promise<string[]> => {
-        // We assume the trigger API is reachable at this relative or absolute URL
-        // In local dev, it's typically http://localhost:3001
         const TRIGGER_API_URL = process.env.REACT_APP_TRIGGER_API_URL || 'http://localhost:3001';
+        // Use the secret key for the handshake with the Trigger API
+        const SECRET_KEY = process.env.REACT_APP_SCN_API_SECRET_KEY || '';
+
         try {
-            const response = await axios.get(`${TRIGGER_API_URL}/api/logs/${taskId}`);
+            const response = await axios.get(`${TRIGGER_API_URL}/api/logs/${taskId}`, {
+                headers: {
+                    'x-api-key': SECRET_KEY
+                }
+            });
             return response.data.logs || [];
         } catch (error) {
             // Silently fail log fetching to avoid disrupting main status polling
+            console.warn('[taskApi] Log fetch failed. Check X-API-KEY or Trigger API status.');
             return [];
         }
     }

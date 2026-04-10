@@ -1,16 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { taskApi } from '../services/taskApi';
 import { TaskData, LookupData } from '../types/automation.types';
 import { getFriendlyErrorMessage } from '../utils/errorUtils';
 
-
-
-export const useTaskPolling = (taskId: number) => {
+export const useTaskPolling = (taskId: number | null) => {
     const [task, setTask] = useState<TaskData | null>(null);
     const [lookupData, setLookupData] = useState<LookupData[]>([]);
     const [logs, setLogs] = useState<string[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+
+    const taskRef = useRef<TaskData | null>(null);
+    useEffect(() => {
+        taskRef.current = task;
+    }, [task]);
 
     const fetchInitialData = useCallback(async () => {
         try {
@@ -30,14 +33,19 @@ export const useTaskPolling = (taskId: number) => {
     }, [lookupData]);
 
     const fetchTaskStatus = useCallback(async () => {
+        if (taskId === null) return null;
         try {
             const data = await taskApi.getTaskStatus(taskId);
             setTask(data);
-            setError(null);
             return data;
         } catch (err: any) {
-            const msg = getFriendlyErrorMessage(err);
-            setError(msg);
+            console.warn(`[useTaskPolling] Fetch failed for Task ${taskId}: ${err.message}`);
+            
+            // Handle 404 specifically
+            if (err.response?.status === 404) {
+                setError(`Task #${taskId} not found on the server. Please check the ID or trigger a new task.`);
+            }
+            
             throw err;
         } finally {
             setLoading(false);
@@ -48,32 +56,83 @@ export const useTaskPolling = (taskId: number) => {
         fetchInitialData();
     }, [fetchInitialData]);
 
+    // Reset state when taskId changes
     useEffect(() => {
-        // Only start polling if we have lookup data and it's not already terminal
-        if (lookupData.length === 0) return;
-        if (isTerminalStatus(task?.status)) return;
+        if (taskId === null) {
+            setTask(null);
+            setLogs([]);
+            setLoading(false);
+            setError(null);
+            return;
+        }
+        setTask(null);
+        setLogs([]);
+        setLoading(true);
+        setError(null);
+    }, [taskId]);
 
-        // Perform initial fetch
-        fetchTaskStatus().catch(() => {});
+    useEffect(() => {
+        // Log setup for debugging
+        console.log(`[useTaskPolling] Setting up polling for Task ${taskId}. Lookup count: ${lookupData.length}`);
+
+        if (taskId === null) return;
+
+        let consecutiveFailures = 0;
+        const FAILURE_LIMIT = 5;
+
+        // Perform initial fetch immediately
+        fetchTaskStatus().catch(err => {
+            console.error('[useTaskPolling] Initial fetch failed:', err.message);
+            consecutiveFailures++;
+        });
 
         // Set up interval for subsequent fetches
         const interval = setInterval(async () => {
+            // Use ref to check current status without depending on 'task' state
+            const currentTask = taskRef.current;
+            if (currentTask && isTerminalStatus(currentTask.status)) {
+                console.log(`[useTaskPolling] Task ${taskId} is terminal. Stopping interval.`);
+                clearInterval(interval);
+                return;
+            }
+
             try {
+                if (taskId === null) return;
+                console.log(`[useTaskPolling] Polling Task ${taskId}...`);
                 const data = await fetchTaskStatus();
-                // Stop polling if we reached a terminal state
+                
+                if (!data) return;
+
+                // Reset failure counter on success
+                consecutiveFailures = 0;
+                setError(null); // Clear any transient error status
+
                 if (isTerminalStatus(data.status)) {
                     clearInterval(interval);
                 }
-            } catch (err) {
-                // Keep polling on transient errors, fetchTaskStatus handles error state
+            } catch (err: any) {
+                consecutiveFailures++;
+                console.warn(`[useTaskPolling] Polling failure ${consecutiveFailures}/${FAILURE_LIMIT}`);
+
+                if (consecutiveFailures >= FAILURE_LIMIT) {
+                    console.error(`[useTaskPolling] Reached failure limit. Stopping polling for Task ${taskId}.`);
+                    clearInterval(interval);
+                    setError('Connection to automation server lost. Please check your network and refresh.');
+                } else if (consecutiveFailures === 1) {
+                    // Optional: Show a "Connecting..." or "Retrying..." state instead of a hard error
+                    console.log(`[useTaskPolling] First failure, waiting for next poll...`);
+                }
             }
         }, 5000);
 
-        return () => clearInterval(interval);
-        // Important: We do NOT depend on 'task' here to avoid restarting the interval on every update
-    }, [lookupData, taskId, isTerminalStatus, fetchTaskStatus]);
+        return () => {
+            console.log(`[useTaskPolling] Cleaning up polling for Task ${taskId}`);
+            clearInterval(interval);
+        };
+    }, [taskId, fetchTaskStatus, isTerminalStatus, lookupData.length]);
 
     const submitOtp = async (otp: string) => {
+        if (taskId === null) return;
         try {
             await taskApi.updateTaskOtp(taskId, otp, 'otp_provided');
             // Optimistically update local state using the helper to get the ID
