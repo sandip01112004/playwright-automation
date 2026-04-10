@@ -15,10 +15,10 @@ async function injectTokensAndReload(page: Page, baseUrl: string) {
     await test.step('Inject & Verify Auth Tokens', async () => {
         const supplierName = config.SUPPLIER_NAME;
         const targetSystemId = config.TARGET_SYSTEM_ID;
-        const apiToken = await AutomationService.getAutomationToken(targetSystemId, supplierName);
-
+        const apiToken = await AutomationService.getAutomationToken(targetSystemId, supplierName) || '';
+        
         if (!apiToken) {
-            throw new Error(`[Auth] Failed to fetch automation token for: ${supplierName}`);
+            console.warn(`[Auth] No automation token found for: ${supplierName}. Proceeding directly to manual login flow.`);
         }
 
         // Ensure tokens are injected on every page load
@@ -66,7 +66,10 @@ export const test = base.extend<{ page: Page, payload: AutomationPayload }>({
         const context = await browser.newContext();
         const page = await context.newPage();
         const baseUrl = config.BASE_URL;
-        const taskId = payload.task_id || 1;
+        const taskId = payload.task_id;
+        if (!taskId) {
+            throw new Error('[Auth] Missing task_id in AutomationPayload. Aborting worker execution.');
+        }
         const automationService = new AutomationService(taskId);
 
         // 1. Initialize Task Status
@@ -82,27 +85,33 @@ export const test = base.extend<{ page: Page, payload: AutomationPayload }>({
 
         // 3. Detect & Handle Expired Session
         await test.step('Validate & Handle Session State', async () => {
-            let isLoginRequired = false;
             try {
-                await Promise.race([
-                    page.waitForURL(/.*\/login/i, { timeout: 10000 }),
-                    page.waitForURL(/.*\/dashboard/i, { timeout: 10000 })
-                ]);
-                isLoginRequired = page.url().includes('/login');
-            } catch {
-                isLoginRequired = page.url().includes('/login');
-            }
+                let isLoginRequired = false;
+                try {
+                    await Promise.race([
+                        page.waitForURL(/.*\/login/i, { timeout: 10000 }),
+                        page.waitForURL(/.*\/dashboard/i, { timeout: 10000 })
+                    ]);
+                    isLoginRequired = page.url().includes('/login');
+                } catch {
+                    isLoginRequired = page.url().includes('/login');
+                }
 
-            if (isLoginRequired) {
-                console.log(`[Auth] Session expired or invalid. Performing automated login...`);
-                await test.step('Unified Login Flow', async () => {
-                    await performFullLogin(page, automationService);
-                });
+                if (isLoginRequired) {
+                    console.log(`[Auth] Session expired or invalid. Performing automated login...`);
+                    await test.step('Unified Login Flow', async () => {
+                        await performFullLogin(page, automationService);
+                    });
 
-                // Sync and re-inject fresh tokens
-                config.refresh();
-                console.log(`[Auth] Login successful. Re-injecting fresh session tokens...`);
-                await injectTokensAndReload(page, baseUrl);
+                    // Sync and re-inject fresh tokens
+                    config.refresh();
+                    console.log(`[Auth] Login successful. Re-injecting fresh session tokens...`);
+                    await injectTokensAndReload(page, baseUrl);
+                }
+            } catch (err: any) {
+                console.error(`[Auth] Setup failed: ${err.message}`);
+                await automationService.updateTaskStatus('failed', { error_message: `Setup Failed: ${err.message}` });
+                throw err;
             }
         });
 

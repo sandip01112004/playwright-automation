@@ -39,7 +39,22 @@ export class AutomationService {
 
         try {
             const url = `${this.baseUrl}/reference/lookupdata/?category=${category}`;
-            const response = await axios.get(url, { headers: this.headers });
+            
+            // Try with existing headers first
+            let response;
+            try {
+                response = await axios.get(url, { headers: this.headers });
+            } catch (err: any) {
+                if (err.response?.status === 401) {
+                    // Fallback: This is often a public endpoint, try without the expired token
+                    console.warn(`[AutomationService] 401 on lookup data. Retrying ${category} without authentication...`);
+                    response = await axios.get(url, { 
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' } 
+                    });
+                } else {
+                    throw err;
+                }
+            }
 
             // Extract items based on known response patterns
             const items = response.data.data?.data || response.data.data || (Array.isArray(response.data) ? response.data : []);
@@ -67,7 +82,7 @@ export class AutomationService {
             if (err.response) {
                 console.error(`[AutomationService] Lookup Error Details: ${JSON.stringify(err.response.data).substring(0, 200)}`);
             }
-            throw new Error(`Critical: Failed to load ${category} mapping. Automation cannot proceed.`);
+            console.warn(`[AutomationService] Failed to load ${category} mapping. The script will proceed but status updates might fail.`);
         }
     }
 
@@ -78,9 +93,7 @@ export class AutomationService {
         try {
             const url = `${this.baseUrl}/automation_task/${this.taskId}/`;
             console.log(`>>> [DEBUG] FETCHING TASK FROM: ${url}`);
-            const response = await axios.get(url, {
-                headers: this.headers
-            });
+            const response = await this.request('GET', url);
             const data = response.data.data || response.data;
             // console.log(`[AutomationService] Task ${this.taskId} data fetched successfully.`);
 
@@ -101,35 +114,61 @@ export class AutomationService {
      * The key is mapped to a numeric ID using the lookup API.
      */
     async updateTaskStatus(statusKey: string, extra: { otp?: string; error_message?: string } = {}) {
-        await this.loadLookupData();
-
-        const statusId = this.lookupCache[statusKey.toLowerCase()];
-        if (!statusId) {
-            console.error(`[AutomationService] Invalid status key: "${statusKey}". Available: ${Object.keys(this.lookupCache).join(', ')}`);
-            throw new Error(`Invalid status key: ${statusKey}`);
-        }
-
-        console.log(`[Service] Updating Task ${this.taskId} status: "${statusKey}"`);
-        const payload: any = { status: statusId, ...extra };
-
-        // If status is 'processing', explicitly clear old data
-        if (statusId === this.lookupCache['processing']) {
-            payload.otp = '';
-            payload.error_message = '';
-        }
-
-        const url = `${this.baseUrl}/automation_task/${this.taskId}/`;
         try {
-            const response = await axios.patch(url, payload, {
-                headers: this.headers
-            });
+            await this.loadLookupData();
+
+            const statusId = this.lookupCache[statusKey.toLowerCase()];
+            if (!statusId) {
+                console.error(`[AutomationService] Invalid status key: "${statusKey}". Mapping missing.`);
+                return;
+            }
+
+            console.log(`[Service] Updating Task ${this.taskId} status: "${statusKey}"`);
+            const payload: any = { status: statusId, ...extra };
+
+            // If status is 'processing', explicitly clear old data
+            if (statusId === this.lookupCache['processing']) {
+                payload.otp = '';
+                payload.error_message = '';
+            }
+
+            const url = `${this.baseUrl}/automation_task/${this.taskId}/`;
+            const response = await this.request('PATCH', url, payload);
             return response.data;
         } catch (err: any) {
-            console.error(`[AutomationService] Failed to update task status: ${err.message}`);
-            if (err.response) {
-                console.error(`[AutomationService] Server responded with: ${JSON.stringify(err.response.data)}`);
+            console.error(`[AutomationService] Failed to update task status to "${statusKey}": ${err.message}`);
+            // Silently fail so the automation can proceed to login/worker execution
+            return null;
+        }
+    }
+
+    /**
+     * Private helper to perform axios requests with retry logic
+     */
+    private async request(method: 'GET' | 'POST' | 'PATCH', url: string, data?: any, retries: number = 3): Promise<any> {
+        let lastError: any;
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+                return await axios({
+                    method,
+                    url,
+                    data,
+                    headers: this.headers
+                });
+            } catch (err: any) {
+                lastError = err;
+                const status = err.response?.status;
+                // Only retry on network errors or 5xx server errors
+                const shouldRetry = !status || (status >= 500 && status <= 599);
+                
+                if (shouldRetry && attempt < retries) {
+                    const delay = attempt * 2000;
+                    console.warn(`[AutomationService] ${method} ${url} failed (${status || 'Network'}). Attempt ${attempt}/${retries}. Retrying in ${delay}ms...`);
+                    await new Promise(r => setTimeout(r, delay));
+                } else {
+                    throw err;
+                }
             }
-            throw err;
         }
     }
 
@@ -155,20 +194,27 @@ export class AutomationService {
         try {
             // Search for existing record
             const searchUrl = `${this.baseUrl}/automation_token/?target_system=${config.TARGET_SYSTEM_ID}&username=${encodeURIComponent(username)}`;
-            const searchResponse = await axios.get(searchUrl, { headers: this.headers });
-            const results = searchResponse.data?.data?.results || [];
+            const searchResponse = await this.request('GET', searchUrl);
+            
+            const data = searchResponse.data?.data || {};
+            const results = data.results || [];
+            const count = data.count ?? results.length;
 
-            if (results.length > 0) {
+            if (count > 0 && results.length > 0) {
+                // Update existing
                 const tokenId = results[0].id;
-                await axios.patch(`${this.baseUrl}/automation_token/${tokenId}/`, {
+                console.log(`[AutomationService] Syncing token: Updating existing record (ID: ${tokenId}) for ${username}`);
+                await this.request('PATCH', `${this.baseUrl}/automation_token/${tokenId}/`, {
                     token_data: token
-                }, { headers: this.headers });
+                });
             } else {
-                await axios.post(`${this.baseUrl}/automation_token/`, {
+                // Create new
+                console.log(`[AutomationService] Syncing token: Creating new record for ${username} (Count was 0)`);
+                await this.request('POST', `${this.baseUrl}/automation_token/`, {
                     username,
                     token_data: token,
                     target_system: config.TARGET_SYSTEM_ID
-                }, { headers: this.headers });
+                });
             }
         } catch (err: any) {
             console.error(`[AutomationService] Token sync failed: ${err.message}`);
@@ -188,8 +234,10 @@ export class AutomationService {
                 }
             });
 
-            const results = response.data?.data?.results;
-            if (results && results.length > 0) {
+            const data = response.data?.data || {};
+            const results = data.results || [];
+
+            if (results.length > 0) {
                 const token = results[0].token_data;
                 return token;
             }
@@ -199,6 +247,39 @@ export class AutomationService {
         } catch (err: any) {
             console.error(`[AutomationService] Failed to retrieve automation token: ${err.message}`);
             return null;
+        }
+    }
+
+    /**
+     * static helper for the Trigger API to decide between CONTINUE and LOGIN_AND_POST
+     */
+    static async checkTokenStatus(username: string, targetSystem: string): Promise<{ exists: boolean; id?: number }> {
+        const baseUrl = (process.env.BFC_API_URL || 'https://api-dev-next.biofuelcircle.com/api/v1').replace(/\/$/, '');
+        const url = `${baseUrl}/automation_token/?target_system=${targetSystem}&username=${encodeURIComponent(username)}`;
+        
+        try {
+            const response = await axios.get(url, {
+                headers: {
+                    'Authorization': `Bearer ${config.BFC_API_TOKEN}`,
+                    'Accept': 'application/json'
+                }
+            });
+
+            const data = response.data?.data || {};
+            const results = data.results || [];
+
+            if (results.length > 0) {
+                const tokenObj = results[0];
+                return {
+                    exists: true,
+                    id: tokenObj.id
+                };
+            }
+
+            return { exists: false };
+        } catch (err: any) {
+            console.error(`[AutomationService] Failed to check token status: ${err.message}`);
+            return { exists: false };
         }
     }
 
@@ -214,6 +295,9 @@ export class AutomationService {
         const start = Date.now();
         let attempts = 0;
 
+        await this.loadLookupData();
+        const terminalStatuses = ['completed', 'failed'].map(s => this.lookupCache[s]).filter(id => id !== undefined);
+
         console.log(`[Service] Waiting for ${fieldName} input from dashboard on Task ${this.taskId}...`);
         while (timeoutMs === 0 || Date.now() - start < timeoutMs) {
             try {
@@ -223,11 +307,19 @@ export class AutomationService {
                 });
                 const data = response.data.data || response.data;
 
+                // Stop polling if the task has been marked completed or failed by someone else
+                if (terminalStatuses.includes(Number(data.status))) {
+                    console.warn(`[AutomationService] Aborting poll for ${fieldName}: Task ${this.taskId} is already in terminal state "${data.status}".`);
+                    throw new Error(`Task ${this.taskId} reached terminal state during polling.`);
+                }
+
                 if (condition(data)) {
                     const value = data[fieldName];
                     return value as T;
                 }
             } catch (err: any) {
+                if (err.message.includes('terminal state')) throw err;
+                
                 // Log periodic warnings instead of every failure to reduce noise
                 if (attempts % 6 === 0) { // Approx once per 30s
                     console.warn(`[AutomationService] Polling Task ${this.taskId} for ${fieldName}... (${err.message})`);
@@ -240,4 +332,5 @@ export class AutomationService {
 
         throw new Error(`[AutomationService] Timeout: User did not provide ${fieldName} within ${timeoutMs / 1000}s on the dashboard.`);
     }
+
 }
