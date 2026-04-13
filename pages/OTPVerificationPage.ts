@@ -18,24 +18,14 @@ export class OTPVerificationPage {
         otp = otp.trim().replace(/\D/g, ''); // Ensure only digits and trimmed
         if (otp.length !== 6) throw new Error(`OTP must be 6 digits, received: "${otp}"`);
 
-        console.log(`[UI] Filling OTP digits individually...`);
+        // Click the first box to ensure focus
+        await this.page.locator('input[formcontrolname="input1"]').click();
 
+        // Use individual key presses to ensure all events (keydown, keypress, keyup) fire correctly
         for (let i = 0; i < 6; i++) {
-            const index = i + 1;
-            const selector = `input[formcontrolname="input${index}"]`;
-
-            // Focus and TYPE each digit for maximum event coverage (keyup, input, change)
-            const input = this.page.locator(selector);
-            await input.click({ timeout: 5000 });
-            await input.pressSequentially(otp.charAt(i), { delay: 50 });
-
-            // Small delay to ensure the UI processes the input
-            await this.page.waitForTimeout(50);
+            await this.page.keyboard.press(otp.charAt(i));
+            await this.page.waitForTimeout(100); // Small delay to mimic human speed
         }
-
-        // Final safety check: Blur the last input to trigger any remaining events
-        await this.page.locator('input[formcontrolname="input6"]').blur();
-        await this.page.waitForTimeout(500);
     }
 
     /**
@@ -46,32 +36,13 @@ export class OTPVerificationPage {
         const otp = await automationService.waitForOtp();
         await this.fillOTP(otp);
 
-        // Wait for the button and ensure it is enabled
+        // Wait for the button to be enabled/clickable
         await this.verifyButton.waitFor({ state: 'visible' });
+        await this.verifyButton.click();
 
-        console.log(`[Auth] OTP filled. Clicking Continue...`);
-        // Use force: true to bypass any potential overlays and ensure the click registers
-        await this.verifyButton.click({ force: true });
-
-        // Watch for results: Success (URL change) or Failure (Error message on screen)
-        try {
-            await Promise.all([
-                // Success path
-                this.page.waitForURL((url) => !url.href.includes('verifyOTP'), {
-                    timeout: config.WAIT_TIMEOUT,
-                    waitUntil: 'load'
-                }),
-
-            ]);
-        } catch (err: any) {
-            // If it's the portal error we threw, re-throw it
-            if (err.message.includes('Portal Error')) throw err;
-
-            // Otherwise, it was probably a URL timeout
-            if (err.message.includes('timeout')) {
-                throw new Error('Login Timeout: The page did not redirect after OTP submission. It might be slow or the record was not processed.');
-            }
-            throw err;
-        }
+        // Wait until the URL no longer contains 'verifyOTP', meaning a successful login or redirect
+        await this.page.waitForURL((url) => !url.href.includes('verifyOTP'), { 
+            timeout: config.WAIT_TIMEOUT || 60000 
+        });
     }
 }
