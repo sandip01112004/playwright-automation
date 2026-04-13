@@ -17,7 +17,7 @@ const AutomationDashboard: React.FC = () => {
 
     // 2. Prevent Re-discovery of handled tasks
     const handledTaskIds = React.useRef<Set<string>>(new Set());
-    
+
     // Mark current task as handled once it becomes active
     React.useEffect(() => {
         if (taskId) {
@@ -32,7 +32,7 @@ const AutomationDashboard: React.FC = () => {
         const handleUrlChange = () => {
             const queryParams = new URLSearchParams(window.location.search);
             const idValue = queryParams.get('taskId');
-            
+
             if (!idValue) {
                 setUrlError(null);
                 setTaskId(null);
@@ -79,26 +79,26 @@ const AutomationDashboard: React.FC = () => {
             // We focus on STARTING because trigger-api sets it to STARTING only at the beginning of a flow
             const isStarting = active.status === 'STARTING';
             const isNewTask = !taskId || active.taskId.toString() !== taskId.toString();
-            
+
             if (isStarting || isNewTask) {
                 // Only "wake up" if we haven't already handled this specific STARTING event for this task
                 // We use a combination of taskId and a 'recomputing' flag if needed, 
                 // but for now, just setting the taskId will trigger a refresh in useTaskPolling if taskId changes.
                 // If taskId is the same, we need to manually force a refresh or rely on useTaskPolling.
-                
+
                 if (isNewTask || !handledTaskIds.current.has(`${active.taskId}_${active.status}`)) {
                     console.log(`[Discovery] ${isNewTask ? 'New' : 'Restarted'} task detected: ${active.taskId} (Status: ${active.status}). Waking up...`);
-                    
+
                     // Mark as handled for this specific status
                     handledTaskIds.current.add(`${active.taskId}_${active.status}`);
-                    
+
                     const newUrl = `${window.location.pathname}?taskId=${active.taskId}`;
                     window.history.pushState({}, '', newUrl);
-                    
+
                     // If taskId is the same, we need to force useTaskPolling to restart.
                     // The easiest way is to briefly set taskId to null then back, 
                     // or better: let useTaskPolling handle status transitions from terminal to active.
-                    
+
                     if (!isNewTask) {
                         // Force a reload if it's a restart of the same task to ensure all hooks reset
                         window.location.reload();
@@ -116,7 +116,7 @@ const AutomationDashboard: React.FC = () => {
         // Clear the URL query params
         window.history.replaceState({}, document.title, window.location.pathname);
         setTaskId(null);
-        
+
         // Signal the Trigger API to reset its memory
         try {
             const TRIGGER_API_URL = process.env.REACT_APP_TRIGGER_API_URL || 'http://localhost:3001';
@@ -128,9 +128,9 @@ const AutomationDashboard: React.FC = () => {
         } catch (err) {
             console.warn('[Dashboard] API Reset failed:', err);
         }
-        
+
         // Refresh the page to restore clean idle state
-        window.location.reload(); 
+        window.location.reload();
     }, []);
 
     const { task, lookupData, logs, loading, error, isReconnecting, submitOtp } = useTaskPolling(taskId);
@@ -140,7 +140,7 @@ const AutomationDashboard: React.FC = () => {
         if (!taskId || !task || !lookupData.length) return;
 
         const statusId = Number(task.status);
-        const isFinished = lookupData.some(l => 
+        const isFinished = lookupData.some(l =>
             String(l.value || l.name).toLowerCase() === 'completed' && l.id === statusId
         );
 
@@ -170,12 +170,12 @@ const AutomationDashboard: React.FC = () => {
                 <div className="glass-card" style={{ maxWidth: '500px' }}>
                     <div className="status-badge" style={{ marginBottom: '32px' }}>System Ready</div>
                     <div style={{ position: 'relative', width: '80px', height: '80px', margin: '0 auto 32px' }}>
-                        <div style={{ 
-                            width: '100%', height: '100%', 
+                        <div style={{
+                            width: '100%', height: '100%',
                             borderRadius: '50%', background: 'rgba(59, 130, 246, 0.1)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center'
                         }}>
-                             <div className="pulse-dot"></div>
+                            <div className="pulse-dot"></div>
                         </div>
                     </div>
                     <h2>Waiting for Trigger</h2>
@@ -188,9 +188,9 @@ const AutomationDashboard: React.FC = () => {
                             POST /api/trigger
                         </code>
                     </div>
-                    
+
                     <div style={{ marginTop: '20px' }}>
-                        <button 
+                        <button
                             onClick={handleReset}
                             style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '0.75rem', textDecoration: 'underline' }}
                         >
@@ -221,16 +221,16 @@ const AutomationDashboard: React.FC = () => {
     // Error Priority: If a polling error occurs, check if we already have a task failure first
     if (error) {
         // If we have task data AND it's already in a failed status, prefer showing that specific error
-        const isTaskFailed = task && lookupData.some(l => 
+        const isTaskFailed = task && lookupData.some(l =>
             String(l.value || l.name).toLowerCase() === 'failed' && l.id === Number(task.status)
         );
 
         if (isTaskFailed) {
             return (
                 <div className="dashboard-container">
-                    <ErrorScreen 
-                        message={task.error_message || error} 
-                        scn={(task as any)?.tracking_reference || (task as any)?.scn} 
+                    <ErrorScreen
+                        message={task.error_message || error}
+                        scn={(task as any)?.tracking_reference || (task as any)?.scn}
                         onReset={handleReset}
                     />
                 </div>
@@ -240,9 +240,9 @@ const AutomationDashboard: React.FC = () => {
         // Otherwise show the polling error (e.g. "Connection lost")
         return (
             <div className="dashboard-container">
-                <ErrorScreen 
-                    message={error} 
-                    scn={(task as any)?.tracking_reference || (task as any)?.scn} 
+                <ErrorScreen
+                    message={error}
+                    scn={(task as any)?.tracking_reference || (task as any)?.scn}
                     onReset={handleReset}
                 />
             </div>
@@ -271,9 +271,9 @@ const AutomationDashboard: React.FC = () => {
         if (isStatus('awaiting_otp')) {
             return (
                 <div className="otp-auto-fetch-container">
-                    <OtpInputScreen 
-                        onSubmit={submitOtp} 
-                        defaultOtp={task?.otp || ''} 
+                    <OtpInputScreen
+                        onSubmit={submitOtp}
+                        defaultOtp={task?.otp || ''}
                     />
                     <div className="auto-fetch-status">
                         <div className="pulse-dot tiny"></div>
@@ -319,8 +319,8 @@ const AutomationDashboard: React.FC = () => {
                 </div>
             )}
 
-            {/* Footer Status Bar - Only show if not Task 1/0 or explicitly confirmed */}
-            {taskId !== null && taskId !== 0 && taskId !== 1 && (
+            {/* Footer Status Bar - Show for any valid task ID */}
+            {taskId !== null && (
                 <div style={{ marginTop: '30px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '1px' }}>
                     Task ID: #{taskId} • Polling Active
                 </div>

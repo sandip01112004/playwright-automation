@@ -52,13 +52,13 @@ app.use((err: any, req: Request, res: Response, next: any) => {
 app.all(/\/api\/proxy\/(.*)/, async (req: Request, res: Response) => {
     const targetPath = req.params[0];
     const bfcBaseUrl = process.env.BFC_API_URL?.replace(/\/$/, '');
-    
+
     if (!bfcBaseUrl) {
         return res.status(500).json({ error: 'BFC_API_URL not configured in server .env' });
     }
 
     const url = `${bfcBaseUrl}/${targetPath}${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`;
-    
+
     console.log(`[Proxy] ${req.method} ${url}`);
 
     try {
@@ -164,7 +164,7 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
 
     // 3. Automation Token Logic
     console.log(`[API] Checking automation token for Task ${taskIdStr}...`);
-    const targetSystem = Number(process.env.TARGET_SYSTEM_ID);
+    const targetSystem = await AutomationService.fetchTargetSystemId();
     const username = process.env.SUPPLIER_NAME || 'unknown';
 
     const tokenStatus = await AutomationService.checkTokenStatus(username, targetSystem.toString());
@@ -263,7 +263,7 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
         // Update discovery state to finished
         if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
             lastActiveTask.status = 'FINISHED';
-            
+
             // Keep discovery status for 15 seconds so the UI definitely sees it
             // Only clear if the task ID hasn't changed (prevents race conditions)
             setTimeout(() => {

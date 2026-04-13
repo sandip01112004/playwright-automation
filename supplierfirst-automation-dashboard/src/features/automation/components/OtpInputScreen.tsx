@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 interface OtpInputScreenProps {
-    onSubmit: (otp: string) => Promise<void>;
+    onSubmit: (otp: string, skipOtpUpdate?: boolean) => Promise<void>;
     defaultOtp?: string;
 }
 
@@ -9,24 +9,28 @@ const OtpInputScreen: React.FC<OtpInputScreenProps> = ({ onSubmit, defaultOtp = 
     const [otp, setOtp] = useState(defaultOtp);
     const [submitting, setSubmitting] = useState(false);
 
-    useEffect(() => {
-        if (defaultOtp) {
-            setOtp(defaultOtp);
-        }
-    }, [defaultOtp]);
-
-    const handleSubmit = async (e?: React.FormEvent, overrideOtp?: string) => {
+    const handleSubmit = async (e?: React.FormEvent, overrideOtp?: string, isAuto?: boolean) => {
         if (e) e.preventDefault();
         const finalOtp = overrideOtp || otp;
         if (finalOtp.length < 4 || submitting) return;
-        
+
         setSubmitting(true);
         try {
-            await onSubmit(finalOtp);
+            await onSubmit(finalOtp, isAuto);
         } catch (err) {
             setSubmitting(false);
         }
     };
+
+    useEffect(() => {
+        if (defaultOtp && defaultOtp.length === 6 && !submitting) {
+            setOtp(defaultOtp);
+            console.log('[OtpInputScreen] Automated OTP detected. Triggering auto-verify...');
+            handleSubmit(undefined, defaultOtp, true);
+        } else if (defaultOtp) {
+            setOtp(defaultOtp);
+        }
+    }, [defaultOtp, submitting]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value.replace(/\D/g, ''); // Only digits
@@ -55,7 +59,7 @@ const OtpInputScreen: React.FC<OtpInputScreenProps> = ({ onSubmit, defaultOtp = 
                     autoFocus
                 />
                 <button type="submit" disabled={submitting || otp.length < 4}>
-                    {submitting ? 'Submitting...' : 'Verify OTP'}
+                    {submitting ? 'Verifying...' : 'Verify OTP'}
                 </button>
             </form>
         </div>

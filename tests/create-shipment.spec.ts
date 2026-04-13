@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload }) => {
-    const taskId = payload.task_id; // Default to task ID 1 as requested
+    const taskId = payload.task_id;
     console.log(`[Test] Starting Full Shipment Creation for Task ID: ${taskId}`);
     const automationService = new AutomationService(taskId);
 

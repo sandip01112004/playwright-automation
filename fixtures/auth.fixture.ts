@@ -14,9 +14,9 @@ import { performFullLogin } from '../utils/auth-helpers';
 async function injectTokensAndReload(page: Page, baseUrl: string) {
     await test.step('Inject & Verify Auth Tokens', async () => {
         const supplierName = config.SUPPLIER_NAME;
-        const targetSystemId = config.TARGET_SYSTEM_ID;
+        const targetSystemId = await AutomationService.fetchTargetSystemId();
         const apiToken = await AutomationService.getAutomationToken(targetSystemId, supplierName) || '';
-        
+
         if (!apiToken) {
             console.warn(`[Auth] No automation token found for: ${supplierName}. Proceeding directly to manual login flow.`);
         }

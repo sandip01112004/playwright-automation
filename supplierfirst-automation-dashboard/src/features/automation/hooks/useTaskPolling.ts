@@ -28,7 +28,7 @@ export const useTaskPolling = (taskId: number | null) => {
     const isTerminalStatus = useCallback((status: any) => {
         if (!status || lookupData.length === 0) return false;
         const statusId = Number(status);
-        return lookupData.some(l => 
+        return lookupData.some(l =>
             ['completed', 'failed'].includes(String(l.value || l.name).toLowerCase()) && l.id === statusId
         );
     }, [lookupData]);
@@ -41,12 +41,12 @@ export const useTaskPolling = (taskId: number | null) => {
             return data;
         } catch (err: any) {
             console.warn(`[useTaskPolling] Fetch failed for Task ${taskId}: ${err.message}`);
-            
+
             // Handle 404 specifically
             if (err.response?.status === 404) {
                 setError(`Task #${taskId} not found on the server. Please check the ID or trigger a new task.`);
             }
-            
+
             throw err;
         } finally {
             setLoading(false);
@@ -100,7 +100,7 @@ export const useTaskPolling = (taskId: number | null) => {
                 if (taskId === null) return;
                 console.log(`[useTaskPolling] Polling Task ${taskId}...`);
                 const data = await fetchTaskStatus();
-                
+
                 if (!data) return;
 
                 // Reset on success
@@ -127,7 +127,7 @@ export const useTaskPolling = (taskId: number | null) => {
                 const statusId = currentTask ? Number(currentTask.status) : null;
                 const awaitingOtpId = taskApi.getStatusId('awaiting_otp');
                 const processingId = taskApi.getStatusId('processing');
-                
+
                 // Critical state check: be more tolerant if we are in processing, awaiting_otp, 
                 // OR if we haven't successfully connected yet (task is null)
                 const isCriticalState = statusId === awaitingOtpId || statusId === processingId || currentTask === null;
@@ -139,7 +139,7 @@ export const useTaskPolling = (taskId: number | null) => {
 
                 if (consecutiveFailures >= MAX_FAILURES) {
                     // Only show "Connection Lost" if we don't have a terminal result already
-                    const isTaskFailed = currentTask && lookupData.some(l => 
+                    const isTaskFailed = currentTask && lookupData.some(l =>
                         String(l.value || l.name).toLowerCase() === 'failed' && l.id === Number(currentTask.status)
                     );
 
@@ -159,15 +159,19 @@ export const useTaskPolling = (taskId: number | null) => {
         };
     }, [taskId, fetchTaskStatus, isTerminalStatus, lookupData.length]);
 
-    const submitOtp = async (otp: string) => {
+    const submitOtp = async (otp: string, skipOtpUpdate: boolean = false) => {
         if (taskId === null) return;
         try {
-            await taskApi.updateTaskOtp(taskId, otp, 'otp_provided');
+            if (skipOtpUpdate) {
+                await taskApi.updateTaskStatus(taskId, 'otp_provided');
+            } else {
+                await taskApi.updateTaskOtp(taskId, otp, 'otp_provided');
+            }
             // Optimistically update local state using the helper to get the ID
             if (task) {
                 const statusId = taskApi.getStatusId('otp_provided');
                 if (statusId) {
-                    setTask({ ...task, status: statusId });
+                    setTask({ ...task, status: statusId, otp: skipOtpUpdate ? task.otp : otp });
                 }
             }
         } catch (err) {

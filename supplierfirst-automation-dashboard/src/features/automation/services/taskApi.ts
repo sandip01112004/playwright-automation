@@ -110,6 +110,22 @@ export const taskApi = {
         return response.data.data || response.data;
     },
 
+    updateTaskStatus: async (taskId: number, statusKey: string): Promise<TaskData> => {
+        const statusId = lookupCache[statusKey.toLowerCase()];
+
+        if (!statusId) {
+            console.error(`[taskApi] Status key "${statusKey}" not found in cache. Available:`, Object.keys(lookupCache));
+            throw new Error(`Invalid status key: ${statusKey}`);
+        }
+
+        const response = await axios.patch(`${API_BASE_URL}/automation_task/${taskId}/`, {
+            status: statusId
+        }, {
+            headers: authHeaders,
+        });
+        return response.data.data || response.data;
+    },
+
     /**
      * Helper to get a status ID from a string key (if cached)
      */

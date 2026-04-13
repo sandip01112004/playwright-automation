@@ -254,6 +254,40 @@ export class AutomationService {
         }
     }
 
+    /**
+     * Dynamically fetch the ID for "scn_automation" from the lookup data.
+     */
+    static async fetchTargetSystemId(): Promise<number> {
+        const baseUrl = (process.env.BFC_API_URL || 'https://api-dev-next.biofuelcircle.com/api/v1').replace(/\/$/, '');
+        const url = `${baseUrl}/reference/lookupdata/?category=automation_task_type`;
+
+        try {
+            console.log(`[Service] Fetching Target System ID from: ${url}`);
+            const response = await axios.get(url, {
+                headers: {
+                    'Authorization': `Bearer ${config.BFC_API_TOKEN}`,
+                    'Accept': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                }
+            });
+
+            const items = response.data.data?.data || response.data.data || (Array.isArray(response.data) ? response.data : []);
+            const target = items.find((item: any) => item.name === 'scn_automation');
+
+            if (target && target.id) {
+                const id = Number(target.id);
+                console.log(`[Service] Found Target System ID for scn_automation: ${id}`);
+                return id;
+            }
+
+            throw new Error('Target system "scn_automation" not found in lookup data.');
+        } catch (err: any) {
+            console.error(`[AutomationService] Failed to fetch Target System ID: ${err.message}`);
+            // Fallback to environment variable if lookup fails
+            return Number(config.TARGET_SYSTEM_ID);
+        }
+    }
+
     static async getAutomationToken(targetSystem: number, username: string) {
         const baseUrl = (process.env.BFC_API_URL || 'https://api-dev-next.biofuelcircle.com/api/v1').replace(/\/$/, '');
         const url = `${baseUrl}/automation_token/?target_system=${targetSystem}&username=${encodeURIComponent(username)}`;
