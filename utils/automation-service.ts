@@ -212,7 +212,7 @@ export class AutomationService {
                 }
                 return false;
             },
-            timeoutMs, 
+            timeoutMs,
             5000 // Poll every 5 seconds (standard)
         );
     }
@@ -223,8 +223,9 @@ export class AutomationService {
     async saveAutomationToken(token: string) {
         const username = config.SUPPLIER_NAME;
         try {
+            const targetSystemId = await AutomationService.fetchTargetSystemId();
             // Search for existing record
-            const searchUrl = `${this.baseUrl}/automation_token/?target_system=${config.TARGET_SYSTEM_ID}&username=${encodeURIComponent(username)}`;
+            const searchUrl = `${this.baseUrl}/automation_token/?target_system=${targetSystemId}&username=${encodeURIComponent(username)}`;
             const searchResponse = await this.request('GET', searchUrl);
             const data = searchResponse.data?.data || {};
             const results = data.results || [];
@@ -243,7 +244,7 @@ export class AutomationService {
                 await this.request('POST', `${this.baseUrl}/automation_token/`, {
                     username,
                     token_data: token,
-                    target_system: config.TARGET_SYSTEM_ID
+                    target_system: targetSystemId
                 });
             }
         } catch (err: any) {
@@ -255,7 +256,9 @@ export class AutomationService {
     /**
      * Dynamically fetch the ID for "scn_automation" from the lookup data.
      */
+    private static cachedTargetSystemId: number | null = null;
     static async fetchTargetSystemId(): Promise<number> {
+        if (this.cachedTargetSystemId !== null) return this.cachedTargetSystemId;
         const baseUrl = (process.env.BFC_API_URL || 'https://api-dev-next.biofuelcircle.com/api/v1').replace(/\/$/, '');
         const url = `${baseUrl}/reference/lookupdata/?category=automation_task_type`;
 
@@ -273,9 +276,9 @@ export class AutomationService {
             const target = items.find((item: any) => item.name === 'scn_automation');
 
             if (target && target.id) {
-                const id = Number(target.id);
-                console.log(`[Service] Found Target System ID for scn_automation: ${id}`);
-                return id;
+                this.cachedTargetSystemId = Number(target.id);
+                console.log(`[Service] Found Target System ID for scn_automation: ${this.cachedTargetSystemId}`);
+                return this.cachedTargetSystemId;
             }
 
             throw new Error('Target system "scn_automation" not found in lookup data.');

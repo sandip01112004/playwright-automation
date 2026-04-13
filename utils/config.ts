@@ -20,8 +20,8 @@ class Config {
 
     private validate() {
         const required = [
-            'SUPPLIER_NAME', 'SUPPLIER_ID', 'TARGET_SYSTEM_ID', 
-            'BASE_URL', 'BFC_API_URL', 'BFC_API_TOKEN', 
+            'SUPPLIER_NAME', 'SUPPLIER_ID',
+            'BASE_URL', 'BFC_API_URL', 'BFC_API_TOKEN',
             'SCN_API_SECRET_KEY', 'OTP_CHANNEL'
         ];
         const missing = required.filter(key => !process.env[key]);
@@ -38,7 +38,7 @@ class Config {
 
     get SUPPLIER_NAME() { return this.getRequiredEnv('SUPPLIER_NAME'); }
     get SUPPLIER_ID() { return this.getRequiredEnv('SUPPLIER_ID'); }
-    get TARGET_SYSTEM_ID() { return Number(this.getRequiredEnv('TARGET_SYSTEM_ID')); }
+    get TARGET_SYSTEM_ID() { return Number(process.env.TARGET_SYSTEM_ID || 0); }
     get BASE_URL() { return this.getRequiredEnv('BASE_URL'); }
     get BFC_API_URL() { return this.getRequiredEnv('BFC_API_URL'); }
     get BFC_API_TOKEN() { return this.getRequiredEnv('BFC_API_TOKEN'); }

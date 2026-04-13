@@ -33,7 +33,7 @@ app.use(express.json());
 const taskLogs = new Map<string, string[]>();
 
 // Tracking for "Active Task Discovery"
-let lastActiveTask: { taskId: string; status: 'STARTING' | 'ACTIVE' | 'FINISHED' } | null = null;
+let lastActiveTask: { taskId: string; status: 'STARTING' | 'ACTIVE' | 'FINISHED' | 'FAILED' } | null = null;
 
 // Error handling middleware for JSON parsing
 app.use((err: any, req: Request, res: Response, next: any) => {
@@ -249,6 +249,14 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
     pwProcess.stdout.on('data', appendLog);
     pwProcess.stderr.on('data', appendLog);
 
+    pwProcess.on('error', (err) => {
+        appendLog(`[System] Failed to start Playwright process: ${err.message}`);
+        console.error(`[Worker] Failed to start Playwright process for Task ${task_id}:`, err);
+        if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
+            lastActiveTask.status = 'FAILED';
+        }
+    });
+
     pwProcess.on('spawn', () => {
         if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
             lastActiveTask.status = 'ACTIVE';
@@ -260,9 +268,9 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
         appendLog(`[System] Playwright process finished with code ${code} (${status})`);
         console.log(`[Worker] Playwright process for Task ${task_id} finished with code ${code}`);
 
-        // Update discovery state to finished
+        // Update discovery state to finished or failed
         if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
-            lastActiveTask.status = 'FINISHED';
+            lastActiveTask.status = status;
 
             // Keep discovery status for 15 seconds so the UI definitely sees it
             // Only clear if the task ID hasn't changed (prevents race conditions)
