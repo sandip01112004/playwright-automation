@@ -69,22 +69,45 @@ const AutomationDashboard: React.FC = () => {
         }
     }, [taskId, fetchInitialData]);
 
+    // Active Task Discovery (Polls continuously to detect restarts or new tasks)
     React.useEffect(() => {
-        if (taskId) return; // Already tracking a task
-
         const discoveryInterval = setInterval(async () => {
             const active = await taskApi.getActiveTask();
-            if (active && active.taskId && active.status === 'ACTIVE') {
-                // Only "wake up" if we haven't handled this specific Task ID yet
-                if (!handledTaskIds.current.has(active.taskId.toString())) {
-                    console.log(`[Discovery] New active task detected: ${active.taskId}. Waking up...`);
+            if (!active || !active.taskId) return;
+
+            // Optimization: Wake up if task is STARTING
+            // We focus on STARTING because trigger-api sets it to STARTING only at the beginning of a flow
+            const isStarting = active.status === 'STARTING';
+            const isNewTask = !taskId || active.taskId.toString() !== taskId.toString();
+            
+            if (isStarting || isNewTask) {
+                // Only "wake up" if we haven't already handled this specific STARTING event for this task
+                // We use a combination of taskId and a 'recomputing' flag if needed, 
+                // but for now, just setting the taskId will trigger a refresh in useTaskPolling if taskId changes.
+                // If taskId is the same, we need to manually force a refresh or rely on useTaskPolling.
+                
+                if (isNewTask || !handledTaskIds.current.has(`${active.taskId}_${active.status}`)) {
+                    console.log(`[Discovery] ${isNewTask ? 'New' : 'Restarted'} task detected: ${active.taskId} (Status: ${active.status}). Waking up...`);
+                    
+                    // Mark as handled for this specific status
+                    handledTaskIds.current.add(`${active.taskId}_${active.status}`);
+                    
                     const newUrl = `${window.location.pathname}?taskId=${active.taskId}`;
                     window.history.pushState({}, '', newUrl);
-                    // Trigger the local state update
-                    setTaskId(parseInt(active.taskId, 10));
+                    
+                    // If taskId is the same, we need to force useTaskPolling to restart.
+                    // The easiest way is to briefly set taskId to null then back, 
+                    // or better: let useTaskPolling handle status transitions from terminal to active.
+                    
+                    if (!isNewTask) {
+                        // Force a reload if it's a restart of the same task to ensure all hooks reset
+                        window.location.reload();
+                    } else {
+                        setTaskId(parseInt(active.taskId, 10));
+                    }
                 }
             }
-        }, 3000);
+        }, Number(process.env.REACT_APP_DISCOVERY_INTERVAL || 3000));
 
         return () => clearInterval(discoveryInterval);
     }, [taskId]);
@@ -110,7 +133,7 @@ const AutomationDashboard: React.FC = () => {
         window.location.reload(); 
     }, []);
 
-    const { task, lookupData, logs, loading, error, submitOtp } = useTaskPolling(taskId);
+    const { task, lookupData, logs, loading, error, isReconnecting, submitOtp } = useTaskPolling(taskId);
 
     // Auto-reset to Idle when task is finished
     React.useEffect(() => {
@@ -118,11 +141,11 @@ const AutomationDashboard: React.FC = () => {
 
         const statusId = Number(task.status);
         const isFinished = lookupData.some(l => 
-            ['completed', 'failed'].includes(String(l.value || l.name).toLowerCase()) && l.id === statusId
+            String(l.value || l.name).toLowerCase() === 'completed' && l.id === statusId
         );
 
         if (isFinished) {
-            console.log(`[Dashboard] Task ${taskId} finished. returning to Idle in 3 seconds...`);
+            console.log(`[Dashboard] Task ${taskId} completed. Returning to Idle in 3 seconds...`);
             const timer = setTimeout(() => {
                 window.history.pushState({}, '', window.location.pathname);
                 setTaskId(null);
@@ -195,7 +218,26 @@ const AutomationDashboard: React.FC = () => {
         );
     }
 
+    // Error Priority: If a polling error occurs, check if we already have a task failure first
     if (error) {
+        // If we have task data AND it's already in a failed status, prefer showing that specific error
+        const isTaskFailed = task && lookupData.some(l => 
+            String(l.value || l.name).toLowerCase() === 'failed' && l.id === Number(task.status)
+        );
+
+        if (isTaskFailed) {
+            return (
+                <div className="dashboard-container">
+                    <ErrorScreen 
+                        message={task.error_message || error} 
+                        scn={(task as any)?.tracking_reference || (task as any)?.scn} 
+                        onReset={handleReset}
+                    />
+                </div>
+            );
+        }
+
+        // Otherwise show the polling error (e.g. "Connection lost")
         return (
             <div className="dashboard-container">
                 <ErrorScreen 
@@ -227,7 +269,18 @@ const AutomationDashboard: React.FC = () => {
         }
 
         if (isStatus('awaiting_otp')) {
-            return <OtpInputScreen onSubmit={submitOtp} />;
+            return (
+                <div className="otp-auto-fetch-container">
+                    <OtpInputScreen 
+                        onSubmit={submitOtp} 
+                        defaultOtp={task?.otp || ''} 
+                    />
+                    <div className="auto-fetch-status">
+                        <div className="pulse-dot tiny"></div>
+                        <span>Currently fetching OTP automatically from BFC...</span>
+                    </div>
+                </div>
+            );
         }
 
         if (isStatus('completed')) {
@@ -243,6 +296,12 @@ const AutomationDashboard: React.FC = () => {
 
     return (
         <div className="automation-feature">
+            {isReconnecting && (
+                <div className="reconnecting-banner">
+                    <div className="pulse-dot tiny orange"></div>
+                    Connection unstable. Retrying...
+                </div>
+            )}
             {renderContent()}
 
             {/* Live Log Terminal */}

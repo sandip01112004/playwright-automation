@@ -9,6 +9,7 @@ export const useTaskPolling = (taskId: number | null) => {
     const [logs, setLogs] = useState<string[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+    const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
 
     const taskRef = useRef<TaskData | null>(null);
     useEffect(() => {
@@ -78,7 +79,6 @@ export const useTaskPolling = (taskId: number | null) => {
         if (taskId === null) return;
 
         let consecutiveFailures = 0;
-        const FAILURE_LIMIT = 5;
 
         // Perform initial fetch immediately
         fetchTaskStatus().catch(err => {
@@ -103,27 +103,55 @@ export const useTaskPolling = (taskId: number | null) => {
                 
                 if (!data) return;
 
-                // Reset failure counter on success
+                // Reset on success
                 consecutiveFailures = 0;
-                setError(null); // Clear any transient error status
+                setError(null);
+                setIsReconnecting(false);
 
                 if (isTerminalStatus(data.status)) {
                     clearInterval(interval);
                 }
+
+                // Fetch logs
+                const logData = await taskApi.getTaskLogs(taskId);
+                setLogs(logData);
+
+                // --- Automated OTP Retrieval Consolidation ---
+                // The worker now polls the database directly for the OTP.
+                // This block has been removed to prevent duplicate submissions and keep the code clean.
             } catch (err: any) {
                 consecutiveFailures++;
-                console.warn(`[useTaskPolling] Polling failure ${consecutiveFailures}/${FAILURE_LIMIT}`);
+                console.warn(`[useTaskPolling] Polling failure ${consecutiveFailures}`);
 
-                if (consecutiveFailures >= FAILURE_LIMIT) {
-                    console.error(`[useTaskPolling] Reached failure limit. Stopping polling for Task ${taskId}.`);
+                const currentTask = taskRef.current;
+                const statusId = currentTask ? Number(currentTask.status) : null;
+                const awaitingOtpId = taskApi.getStatusId('awaiting_otp');
+                const processingId = taskApi.getStatusId('processing');
+                
+                // Critical state check: be more tolerant if we are in processing, awaiting_otp, 
+                // OR if we haven't successfully connected yet (task is null)
+                const isCriticalState = statusId === awaitingOtpId || statusId === processingId || currentTask === null;
+                const MAX_FAILURES = isCriticalState ? 30 : 5;
+
+                if (consecutiveFailures >= 2) {
+                    setIsReconnecting(true);
+                }
+
+                if (consecutiveFailures >= MAX_FAILURES) {
+                    // Only show "Connection Lost" if we don't have a terminal result already
+                    const isTaskFailed = currentTask && lookupData.some(l => 
+                        String(l.value || l.name).toLowerCase() === 'failed' && l.id === Number(currentTask.status)
+                    );
+
+                    if (!isTaskFailed) {
+                        console.error(`[useTaskPolling] Reached failure limit (${MAX_FAILURES}). Stopping polling.`);
+                        setError('Connection to automation server lost. Please check your network and refresh.');
+                        setIsReconnecting(false);
+                    }
                     clearInterval(interval);
-                    setError('Connection to automation server lost. Please check your network and refresh.');
-                } else if (consecutiveFailures === 1) {
-                    // Optional: Show a "Connecting..." or "Retrying..." state instead of a hard error
-                    console.log(`[useTaskPolling] First failure, waiting for next poll...`);
                 }
             }
-        }, 5000);
+        }, Number(process.env.REACT_APP_POLL_INTERVAL || 2500));
 
         return () => {
             console.log(`[useTaskPolling] Cleaning up polling for Task ${taskId}`);
@@ -148,5 +176,5 @@ export const useTaskPolling = (taskId: number | null) => {
         }
     };
 
-    return { task, lookupData, logs, loading, error, submitOtp };
+    return { task, lookupData, logs, loading, error, isReconnecting, submitOtp };
 };

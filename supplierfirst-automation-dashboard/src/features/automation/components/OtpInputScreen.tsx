@@ -1,21 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface OtpInputScreenProps {
     onSubmit: (otp: string) => Promise<void>;
+    defaultOtp?: string;
 }
 
-const OtpInputScreen: React.FC<OtpInputScreenProps> = ({ onSubmit }) => {
-    const [otp, setOtp] = useState('');
+const OtpInputScreen: React.FC<OtpInputScreenProps> = ({ onSubmit, defaultOtp = '' }) => {
+    const [otp, setOtp] = useState(defaultOtp);
     const [submitting, setSubmitting] = useState(false);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (otp.length < 4) return;
+    useEffect(() => {
+        if (defaultOtp) {
+            setOtp(defaultOtp);
+        }
+    }, [defaultOtp]);
+
+    const handleSubmit = async (e?: React.FormEvent, overrideOtp?: string) => {
+        if (e) e.preventDefault();
+        const finalOtp = overrideOtp || otp;
+        if (finalOtp.length < 4 || submitting) return;
+        
         setSubmitting(true);
         try {
-            await onSubmit(otp);
+            await onSubmit(finalOtp);
         } catch (err) {
             setSubmitting(false);
+        }
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value.replace(/\D/g, ''); // Only digits
+        if (value.length <= 6) {
+            setOtp(value);
+            // Auto-submit if 6 digits are reached
+            if (value.length === 6 && !submitting) {
+                handleSubmit(undefined, value);
+            }
         }
     };
 
@@ -29,9 +49,10 @@ const OtpInputScreen: React.FC<OtpInputScreenProps> = ({ onSubmit }) => {
                     type="text"
                     placeholder="000000"
                     value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
+                    onChange={handleInputChange}
                     maxLength={6}
                     disabled={submitting}
+                    autoFocus
                 />
                 <button type="submit" disabled={submitting || otp.length < 4}>
                     {submitting ? 'Submitting...' : 'Verify OTP'}

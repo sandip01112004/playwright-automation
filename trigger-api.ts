@@ -4,6 +4,7 @@ import { spawn } from 'child_process';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import cors from 'cors';
+import axios from 'axios';
 import { AutomationService } from './utils/automation-service';
 import { config } from './utils/config';
 
@@ -43,6 +44,46 @@ app.use((err: any, req: Request, res: Response, next: any) => {
         });
     }
     next();
+});
+
+/**
+ * PROXY ENDPOINT (Bypasses CORS/Ngrok issues)
+ */
+app.all(/\/api\/proxy\/(.*)/, async (req: Request, res: Response) => {
+    const targetPath = req.params[0];
+    const bfcBaseUrl = process.env.BFC_API_URL?.replace(/\/$/, '');
+    
+    if (!bfcBaseUrl) {
+        return res.status(500).json({ error: 'BFC_API_URL not configured in server .env' });
+    }
+
+    const url = `${bfcBaseUrl}/${targetPath}${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`;
+    
+    console.log(`[Proxy] ${req.method} ${url}`);
+
+    try {
+        const response = await axios({
+            method: req.method,
+            url: url,
+            data: req.body,
+            params: req.query,
+            headers: {
+                ...req.headers,
+                'host': new URL(bfcBaseUrl).host,
+                'origin': bfcBaseUrl,
+                'referer': bfcBaseUrl,
+                'ngrok-skip-browser-warning': 'true',
+                'Authorization': req.headers['authorization'] || `Bearer ${process.env.BFC_API_TOKEN}`
+            },
+            validateStatus: () => true, // Pass all status codes through
+            responseType: 'json'
+        });
+
+        res.status(response.status).json(response.data);
+    } catch (err: any) {
+        console.error(`[Proxy Error] ${err.message}`);
+        res.status(500).json({ error: 'Proxy failed', message: err.message });
+    }
 });
 
 /**
@@ -160,6 +201,16 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
         action: flowAction
     });
 
+    // --- NEW: Neutralize Task Status immediately ---
+    // This prevents the Dashboard from seeing the "failed" status from a previous run
+    try {
+        const automationService = new AutomationService(task_id);
+        await automationService.updateTaskStatus('processing');
+    } catch (err: any) {
+        console.warn(`[API] Failed to pre-neutralize Task ${task_id} status: ${err.message}`);
+    }
+    // ----------------------------------------------
+
     // 6. Launch Playwright Worker
     const payloadString = JSON.stringify(payload);
     const encodedPayload = Buffer.from(payloadString).toString('base64');
@@ -213,18 +264,19 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
         if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
             lastActiveTask.status = 'FINISHED';
             
-            // Clear memory after 5 seconds to stop UI discovery from seeing the old task
+            // Keep discovery status for 15 seconds so the UI definitely sees it
+            // Only clear if the task ID hasn't changed (prevents race conditions)
             setTimeout(() => {
                 if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
-                    console.log(`[API] Clearing Discovery memory for Task ${taskIdStr}`);
+                    console.log(`[API] Clearing Discovery memory for Task ${taskIdStr} (Grace period expired)`);
                     lastActiveTask = null;
                 }
-            }, 5000);
+            }, 15000);
         }
     });
 });
 
-const PORT = process.env.TRIGGER_API_PORT || 3001;
+const PORT = config.TRIGGER_API_PORT;
 app.listen(PORT, () => {
     console.log(`\n================================================`);
     console.log(`Automation Trigger API Running`);

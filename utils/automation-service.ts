@@ -9,6 +9,7 @@ export class AutomationService {
     private baseUrl: string;
     private headers: any;
     private lookupCache: { [key: string]: number } = {};
+    private currentStatusId: number | null = null;
     public payload: any = null;
 
     constructor(taskId: number, baseUrl: string = config.BFC_API_URL) {
@@ -17,7 +18,8 @@ export class AutomationService {
         this.headers = {
             'Authorization': `Bearer ${config.BFC_API_TOKEN}`,
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
         };
 
         // Decode payload if provided by the Trigger API
@@ -39,7 +41,7 @@ export class AutomationService {
 
         try {
             const url = `${this.baseUrl}/reference/lookupdata/?category=${category}`;
-            
+
             // Try with existing headers first
             let response;
             try {
@@ -48,8 +50,12 @@ export class AutomationService {
                 if (err.response?.status === 401) {
                     // Fallback: This is often a public endpoint, try without the expired token
                     console.warn(`[AutomationService] 401 on lookup data. Retrying ${category} without authentication...`);
-                    response = await axios.get(url, { 
-                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' } 
+                    response = await axios.get(url, {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'ngrok-skip-browser-warning': 'true'
+                        }
                     });
                 } else {
                     throw err;
@@ -117,9 +123,25 @@ export class AutomationService {
         try {
             await this.loadLookupData();
 
+            // If currentStatusId is unknown (new instance), fetch it from backend once
+            if (this.currentStatusId === null) {
+                try {
+                    const task = await this.getTask();
+                    this.currentStatusId = Number(task.status);
+                } catch (e) {
+                    console.warn(`[Service] Could not pre-fetch task status for ID ${this.taskId}. Proceeding with update.`);
+                }
+            }
+
             const statusId = this.lookupCache[statusKey.toLowerCase()];
             if (!statusId) {
                 console.error(`[AutomationService] Invalid status key: "${statusKey}". Mapping missing.`);
+                return;
+            }
+
+            // [New Optimization] Skip if status is already correct
+            if (this.currentStatusId === statusId && !extra.otp && !extra.error_message) {
+                console.log(`[Service] Task ${this.taskId} is already "${statusKey}" (Status ID: ${statusId}). Skipping redundant update.`);
                 return;
             }
 
@@ -134,41 +156,40 @@ export class AutomationService {
 
             const url = `${this.baseUrl}/automation_task/${this.taskId}/`;
             const response = await this.request('PATCH', url, payload);
+
+            // Cache the successful status update
+            this.currentStatusId = statusId;
+
             return response.data;
         } catch (err: any) {
             console.error(`[AutomationService] Failed to update task status to "${statusKey}": ${err.message}`);
-            // Silently fail so the automation can proceed to login/worker execution
-            return null;
+            throw err; // Don't swallow errors anymore, let the test/fixture handle it
         }
     }
 
     /**
      * Private helper to perform axios requests with retry logic
      */
-    private async request(method: 'GET' | 'POST' | 'PATCH', url: string, data?: any, retries: number = 3): Promise<any> {
-        let lastError: any;
-        for (let attempt = 1; attempt <= retries; attempt++) {
-            try {
-                return await axios({
-                    method,
-                    url,
-                    data,
-                    headers: this.headers
-                });
-            } catch (err: any) {
-                lastError = err;
-                const status = err.response?.status;
-                // Only retry on network errors or 5xx server errors
-                const shouldRetry = !status || (status >= 500 && status <= 599);
-                
-                if (shouldRetry && attempt < retries) {
-                    const delay = attempt * 2000;
-                    console.warn(`[AutomationService] ${method} ${url} failed (${status || 'Network'}). Attempt ${attempt}/${retries}. Retrying in ${delay}ms...`);
-                    await new Promise(r => setTimeout(r, delay));
-                } else {
-                    throw err;
-                }
+    private async request(method: 'GET' | 'POST' | 'PATCH', url: string, data?: any): Promise<any> {
+        try {
+            const headers: any = { ...this.headers };
+
+            // Critical Fix: Remove Content-Type for GET requests to avoid 400 Bad Request
+            if (method === 'GET') {
+                delete headers['Content-Type'];
             }
+
+            return await axios({
+                method,
+                url,
+                data,
+                headers: headers
+            });
+        } catch (err: any) {
+            const status = err.response?.status;
+            const message = err.response?.data?.message || err.message;
+            console.error(`[AutomationService] ${method} ${url} failed with status ${status || 'Network'}: ${message}`);
+            throw err;
         }
     }
 
@@ -178,11 +199,22 @@ export class AutomationService {
     async waitForOtp(timeoutMs: number = 0) {
         await this.loadLookupData();
         const otpProvidedId = this.lookupCache['otp_provided'];
+        const awaitingOtpId = this.lookupCache['awaiting_otp'];
 
         return this.pollTaskField<string>(
             'otp',
-            (data) => data.otp && (Number(data.status) === otpProvidedId),
-            timeoutMs
+            (data) => {
+                const hasValidOtp = data.otp && String(data.otp).trim().length === 6;
+                const isAcceptableStatus = [otpProvidedId, awaitingOtpId].includes(Number(data.status));
+
+                if (hasValidOtp && isAcceptableStatus) {
+                    console.log(`[AutomationService] Found automated OTP in database: ${data.otp}. Proceeding...`);
+                    return true;
+                }
+                return false;
+            },
+            timeoutMs,
+            1500 // Poll every 1.5 seconds for high-frequency OTP checks
         );
     }
 
@@ -195,11 +227,11 @@ export class AutomationService {
             // Search for existing record
             const searchUrl = `${this.baseUrl}/automation_token/?target_system=${config.TARGET_SYSTEM_ID}&username=${encodeURIComponent(username)}`;
             const searchResponse = await this.request('GET', searchUrl);
-            
+            console.log(`Responce : ${searchResponse}`);
             const data = searchResponse.data?.data || {};
             const results = data.results || [];
             const count = data.count ?? results.length;
-
+            console.log(`[AutomationService] Syncing token: Found ${count} records for ${username}`);
             if (count > 0 && results.length > 0) {
                 // Update existing
                 const tokenId = results[0].id;
@@ -230,7 +262,9 @@ export class AutomationService {
             const response = await axios.get(url, {
                 headers: {
                     'Authorization': `Bearer ${config.BFC_API_TOKEN}`,
-                    'Accept': 'application/json'
+                    'Accept': 'application/json',
+                    'Content-Type': undefined as any,
+                    'ngrok-skip-browser-warning': 'true'
                 }
             });
 
@@ -256,12 +290,14 @@ export class AutomationService {
     static async checkTokenStatus(username: string, targetSystem: string): Promise<{ exists: boolean; id?: number }> {
         const baseUrl = (process.env.BFC_API_URL || 'https://api-dev-next.biofuelcircle.com/api/v1').replace(/\/$/, '');
         const url = `${baseUrl}/automation_token/?target_system=${targetSystem}&username=${encodeURIComponent(username)}`;
-        
+
         try {
             const response = await axios.get(url, {
                 headers: {
                     'Authorization': `Bearer ${config.BFC_API_TOKEN}`,
-                    'Accept': 'application/json'
+                    'Accept': 'application/json',
+                    'Content-Type': undefined as any,
+                    'ngrok-skip-browser-warning': 'true'
                 }
             });
 
@@ -314,12 +350,18 @@ export class AutomationService {
                 }
 
                 if (condition(data)) {
+                    console.log(`[Service] Condition met for ${fieldName}. Value: ${data[fieldName]}`);
                     const value = data[fieldName];
                     return value as T;
+                } else {
+                    // Periodic debug for developers
+                    if (attempts % 2 === 0) {
+                        console.log(`[Service] Polling ${fieldName}... (Current: "${data[fieldName]}", Status: ${data.status})`);
+                    }
                 }
             } catch (err: any) {
                 if (err.message.includes('terminal state')) throw err;
-                
+
                 // Log periodic warnings instead of every failure to reduce noise
                 if (attempts % 6 === 0) { // Approx once per 30s
                     console.warn(`[AutomationService] Polling Task ${this.taskId} for ${fieldName}... (${err.message})`);

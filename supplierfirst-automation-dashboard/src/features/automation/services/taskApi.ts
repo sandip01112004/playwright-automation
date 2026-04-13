@@ -2,12 +2,15 @@ import axios from 'axios';
 import { TaskData, LookupData } from '../types/automation.types';
 
 // In Create React App, variables MUST start with REACT_APP_ to be visible in the browser
-const API_BASE_URL = (process.env.REACT_APP_biofuelcircle_API_BASE_URL || 'https://api-dev-next.biofuelcircle.com/api/v1').replace(/\/$/, '');
+const rawUrl = process.env.REACT_APP_TRIGGER_API_URL ?? '';
+const TRIGGER_API_URL = rawUrl.replace(/\/$/, '');
+const API_BASE_URL = `${TRIGGER_API_URL}/api/proxy`;
 const API_TOKEN = process.env.REACT_APP_biofuelcircle_API_TOKEN || '';
 
 const commonHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
 };
 
 const authHeaders = {
@@ -26,7 +29,7 @@ export const taskApi = {
         }
 
         const url = `${API_BASE_URL}/reference/lookupdata/?category=${category}`;
-        
+
         const fetchPromise = axios.get(url, { headers: commonHeaders })
             .then(response => {
                 const data = response.data.data?.data || response.data.data || response.data;
@@ -60,7 +63,7 @@ export const taskApi = {
             const response = await axios.get(url, {
                 headers: authHeaders,
             });
-            
+
             // Defensive: Check if we got an ngrok error page instead of JSON
             if (typeof response.data === 'string' && response.data.includes('ngrok')) {
                 throw new Error('Ngrok Tunnel Error: The backend tunnel is inactive or the URL is invalid (ERR_NGROK_6024).');
@@ -68,8 +71,25 @@ export const taskApi = {
 
             return response.data.data || response.data;
         } catch (error: any) {
+            if (error.message === 'Network Error') {
+                throw new Error('Network Error: The automation server is unreachable. This usually happens if the ngrok tunnel is down or your internet is unstable.');
+            }
             console.error(`[taskApi] getTaskStatus failed for ${url}:`, error.response?.status, error.response?.data || error.message);
             throw error;
+        }
+    },
+
+    /**
+     * Specifically fetch the OTP from the task object (or dedicated endpoint)
+     */
+    fetchAutomatedOtp: async (taskId: number): Promise<string | null> => {
+        const url = `${API_BASE_URL}/automation_task/${taskId}/`;
+        try {
+            const response = await axios.get(url, { headers: authHeaders });
+            const data = response.data.data || response.data;
+            return data.otp || null;
+        } catch (error) {
+            return null;
         }
     },
 
@@ -106,7 +126,10 @@ export const taskApi = {
 
         try {
             const response = await axios.get(`${TRIGGER_API_URL}/api/active-task`, {
-                headers: { 'x-api-key': SECRET_KEY }
+                headers: {
+                    ...commonHeaders,
+                    'x-api-key': SECRET_KEY
+                }
             });
             return response.data;
         } catch (error) {
@@ -125,6 +148,7 @@ export const taskApi = {
         try {
             const response = await axios.get(`${TRIGGER_API_URL}/api/logs/${taskId}`, {
                 headers: {
+                    ...commonHeaders,
                     'x-api-key': SECRET_KEY
                 }
             });
