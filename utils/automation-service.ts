@@ -98,7 +98,6 @@ export class AutomationService {
     async getTask() {
         try {
             const url = `${this.baseUrl}/automation_task/${this.taskId}/`;
-            console.log(`>>> [DEBUG] FETCHING TASK FROM: ${url}`);
             const response = await this.request('GET', url);
             const data = response.data.data || response.data;
             // console.log(`[AutomationService] Task ${this.taskId} data fetched successfully.`);
@@ -213,8 +212,8 @@ export class AutomationService {
                 }
                 return false;
             },
-            timeoutMs,
-            1500 // Poll every 1.5 seconds for high-frequency OTP checks
+            timeoutMs, 
+            5000 // Poll every 5 seconds (standard)
         );
     }
 
@@ -227,7 +226,6 @@ export class AutomationService {
             // Search for existing record
             const searchUrl = `${this.baseUrl}/automation_token/?target_system=${config.TARGET_SYSTEM_ID}&username=${encodeURIComponent(username)}`;
             const searchResponse = await this.request('GET', searchUrl);
-            console.log(`Responce : ${searchResponse}`);
             const data = searchResponse.data?.data || {};
             const results = data.results || [];
             const count = data.count ?? results.length;
