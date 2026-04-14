@@ -139,6 +139,7 @@ app.post('/api/reset', (req: Request, res: Response) => {
 app.post('/api/trigger', async (req: Request, res: Response) => {
     const payload = req.body;
     const task_id = payload.task_id;
+    console.log('Payload:', payload);
 
     // 1. Secret Key Validation
     const incomingSecret = req.headers['x-api-key'];
