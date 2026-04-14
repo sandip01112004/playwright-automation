@@ -151,7 +151,7 @@ export const useTaskPolling = (taskId: number | null) => {
                     clearInterval(interval);
                 }
             }
-        }, 5000);
+        }, Number(process.env.REACT_APP_POLL_INTERVAL || 5000));
 
         return () => {
             console.log(`[useTaskPolling] Cleaning up polling for Task ${taskId}`);

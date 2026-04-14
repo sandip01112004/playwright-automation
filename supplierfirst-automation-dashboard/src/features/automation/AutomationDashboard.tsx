@@ -107,7 +107,7 @@ const AutomationDashboard: React.FC = () => {
                     }
                 }
             }
-        }, 5000);
+        }, Number(process.env.REACT_APP_DISCOVERY_INTERVAL || 5000));
 
         return () => clearInterval(discoveryInterval);
     }, [taskId]);

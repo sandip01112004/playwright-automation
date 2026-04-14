@@ -51,10 +51,10 @@ app.use((err: any, req: Request, res: Response, next: any) => {
  */
 app.all(/\/api\/proxy\/(.*)/, async (req: Request, res: Response) => {
     const targetPath = req.params[0];
-    const bfcBaseUrl = process.env.BFC_API_URL?.replace(/\/$/, '');
+    const bfcBaseUrl = process.env.REACT_APP_biofuelcircle_API_BASE_URL?.replace(/\/$/, '');
 
     if (!bfcBaseUrl) {
-        return res.status(500).json({ error: 'BFC_API_URL not configured in server .env' });
+        return res.status(500).json({ error: 'REACT_APP_biofuelcircle_API_BASE_URL not configured in server .env' });
     }
 
     const url = `${bfcBaseUrl}/${targetPath}${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`;
@@ -73,7 +73,7 @@ app.all(/\/api\/proxy\/(.*)/, async (req: Request, res: Response) => {
                 'origin': bfcBaseUrl,
                 'referer': bfcBaseUrl,
                 'ngrok-skip-browser-warning': 'true',
-                'Authorization': req.headers['authorization'] || `Bearer ${process.env.BFC_API_TOKEN}`
+                'Authorization': req.headers['authorization'] || `Bearer ${process.env.REACT_APP_biofuelcircle_API_TOKEN}`
             },
             validateStatus: () => true, // Pass all status codes through
             responseType: 'json'
@@ -92,7 +92,7 @@ app.all(/\/api\/proxy\/(.*)/, async (req: Request, res: Response) => {
 app.get('/api/logs/:taskId', (req: Request, res: Response) => {
     // Standard X-API-KEY check for log endpoint too
     const incomingSecret = req.headers['x-api-key'];
-    const expectedSecret = process.env.SCN_API_SECRET_KEY;
+    const expectedSecret = process.env.REACT_APP_SCN_API_SECRET_KEY;
     if (!incomingSecret || incomingSecret !== expectedSecret) {
         return res.status(401).json({ error: 'Authentication failed.' });
     }
@@ -107,7 +107,7 @@ app.get('/api/logs/:taskId', (req: Request, res: Response) => {
  */
 app.get('/api/active-task', (req: Request, res: Response) => {
     const incomingSecret = req.headers['x-api-key'];
-    const expectedSecret = process.env.SCN_API_SECRET_KEY;
+    const expectedSecret = process.env.REACT_APP_SCN_API_SECRET_KEY;
     if (!incomingSecret || incomingSecret !== expectedSecret) {
         return res.status(401).json({ error: 'Authentication failed.' });
     }
@@ -123,7 +123,7 @@ app.get('/api/active-task', (req: Request, res: Response) => {
  */
 app.post('/api/reset', (req: Request, res: Response) => {
     const incomingSecret = req.headers['x-api-key'];
-    const expectedSecret = process.env.SCN_API_SECRET_KEY;
+    const expectedSecret = process.env.REACT_APP_SCN_API_SECRET_KEY;
     if (!incomingSecret || incomingSecret !== expectedSecret) {
         return res.status(401).json({ error: 'Authentication failed.' });
     }
@@ -225,7 +225,9 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
             ...process.env,
             TASK_ID: taskIdStr,
             TASK_PAYLOAD: encodedPayload,
-            BFC_API_TOKEN: process.env.BFC_API_TOKEN || '',
+            BFC_API_TOKEN: process.env.REACT_APP_biofuelcircle_API_TOKEN || '',
+            // Also pass the new name explicitly to the worker environment if needed
+            REACT_APP_biofuelcircle_API_TOKEN: process.env.REACT_APP_biofuelcircle_API_TOKEN || '',
             FLOW_ACTION: flowAction,
             DOTENV_CONFIG_QUIET: 'true',
             FORCE_COLOR: '1'
