@@ -2,10 +2,11 @@ import axios from 'axios';
 import { TaskData, LookupData } from '../types/automation.types';
 
 // In Create React App, variables MUST start with REACT_APP_ to be visible in the browser
-const rawUrl = process.env.REACT_APP_TRIGGER_API_URL ?? '';
+const rawUrl = process.env.REACT_APP_TRIGGER_API_URL || '';
 const TRIGGER_API_URL = rawUrl.replace(/\/$/, '');
 const API_BASE_URL = `${TRIGGER_API_URL}/api/proxy`;
 const API_TOKEN = process.env.REACT_APP_biofuelcircle_API_TOKEN || '';
+const SECRET_KEY = process.env.REACT_APP_SCN_API_SECRET_KEY || '';
 
 const commonHeaders = {
     'Content-Type': 'application/json',
@@ -122,8 +123,6 @@ export const taskApi = {
      * Discovery: Fetch the most recently triggered task from the Trigger API
      */
     getActiveTask: async (): Promise<{ taskId: string | null; status: string } | null> => {
-        const TRIGGER_API_URL = process.env.REACT_APP_TRIGGER_API_URL;
-        const SECRET_KEY = process.env.REACT_APP_SCN_API_SECRET_KEY;
 
         try {
             const response = await axios.get(`${TRIGGER_API_URL}/api/active-task`, {
@@ -142,9 +141,6 @@ export const taskApi = {
      * Fetch real-time automation logs from the Trigger API
      */
     getTaskLogs: async (taskId: number): Promise<string[]> => {
-        const TRIGGER_API_URL = process.env.REACT_APP_TRIGGER_API_URL || 'http://localhost:3001';
-        // Use the secret key for the handshake with the Trigger API
-        const SECRET_KEY = process.env.REACT_APP_SCN_API_SECRET_KEY || '';
 
         try {
             const response = await axios.get(`${TRIGGER_API_URL}/api/logs/${taskId}`, {

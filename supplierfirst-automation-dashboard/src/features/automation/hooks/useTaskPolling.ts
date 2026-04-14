@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { taskApi } from '../services/taskApi';
 import { TaskData, LookupData } from '../types/automation.types';
-import { getFriendlyErrorMessage } from '../utils/errorUtils';
 
 export const useTaskPolling = (taskId: number | null) => {
     const [task, setTask] = useState<TaskData | null>(null);
@@ -157,7 +156,7 @@ export const useTaskPolling = (taskId: number | null) => {
             console.log(`[useTaskPolling] Cleaning up polling for Task ${taskId}`);
             clearInterval(interval);
         };
-    }, [taskId, fetchTaskStatus, isTerminalStatus, lookupData.length]);
+    }, [taskId, fetchTaskStatus, isTerminalStatus, lookupData]);
 
     return { task, lookupData, logs, loading, error, isReconnecting };
 };

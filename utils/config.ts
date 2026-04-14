@@ -47,6 +47,7 @@ class Config {
     get TRIGGER_API_PORT() { return Number(process.env.TRIGGER_API_PORT || 3001); }
     get WAIT_TIMEOUT() { return Number(process.env.WAIT_TIMEOUT || 30000); }
     get POLL_INTERVAL() { return Number(process.env.REACT_APP_POLL_INTERVAL || 5000); }
+    get DEFAULT_TRANSPORTER() { return process.env.DEFAULT_TRANSPORTER || 'Bfcsupply'; }
 }
 
 export const config = new Config();

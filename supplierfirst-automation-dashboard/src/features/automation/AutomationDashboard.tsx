@@ -119,7 +119,7 @@ const AutomationDashboard: React.FC = () => {
 
         // Signal the Trigger API to reset its memory
         try {
-            const TRIGGER_API_URL = process.env.REACT_APP_TRIGGER_API_URL || 'http://localhost:3001';
+            const TRIGGER_API_URL = process.env.REACT_APP_TRIGGER_API_URL || '';
             const SECRET_KEY = process.env.REACT_APP_SCN_API_SECRET_KEY || '';
             await fetch(`${TRIGGER_API_URL}/api/reset`, {
                 method: 'POST',

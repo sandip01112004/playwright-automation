@@ -1,4 +1,5 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { config } from '../utils/config';
 
 export class ShipmentFormPage {
     readonly page: Page;
@@ -156,7 +157,7 @@ export class ShipmentFormPage {
     }
 
     //--- Section 4: Transportation Details ---
-    async fillTransportationSection(transporterName: string = 'Bfcsupply') {
+    async fillTransportationSection(transporterName: string = config.DEFAULT_TRANSPORTER) {
         console.log('[Section 4] Filling Transport and Arrival Details...');
         await this.transportDetailsAccordion.click();
 

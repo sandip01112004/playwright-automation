@@ -51,11 +51,7 @@ app.use((err: any, req: Request, res: Response, next: any) => {
  */
 app.all(/\/api\/proxy\/(.*)/, async (req: Request, res: Response) => {
     const targetPath = req.params[0];
-    const bfcBaseUrl = process.env.REACT_APP_biofuelcircle_API_BASE_URL?.replace(/\/$/, '');
-
-    if (!bfcBaseUrl) {
-        return res.status(500).json({ error: 'REACT_APP_biofuelcircle_API_BASE_URL not configured in server .env' });
-    }
+    const bfcBaseUrl = config.BFC_API_URL.replace(/\/$/, '');
 
     const url = `${bfcBaseUrl}/${targetPath}${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`;
 
@@ -73,7 +69,7 @@ app.all(/\/api\/proxy\/(.*)/, async (req: Request, res: Response) => {
                 'origin': bfcBaseUrl,
                 'referer': bfcBaseUrl,
                 'ngrok-skip-browser-warning': 'true',
-                'Authorization': req.headers['authorization'] || `Bearer ${process.env.REACT_APP_biofuelcircle_API_TOKEN}`
+                'Authorization': req.headers['authorization'] || `Bearer ${config.BFC_API_TOKEN}`
             },
             validateStatus: () => true, // Pass all status codes through
             responseType: 'json'
@@ -92,7 +88,7 @@ app.all(/\/api\/proxy\/(.*)/, async (req: Request, res: Response) => {
 app.get('/api/logs/:taskId', (req: Request, res: Response) => {
     // Standard X-API-KEY check for log endpoint too
     const incomingSecret = req.headers['x-api-key'];
-    const expectedSecret = process.env.REACT_APP_SCN_API_SECRET_KEY;
+    const expectedSecret = config.SCN_API_SECRET_KEY;
     if (!incomingSecret || incomingSecret !== expectedSecret) {
         return res.status(401).json({ error: 'Authentication failed.' });
     }
@@ -107,7 +103,7 @@ app.get('/api/logs/:taskId', (req: Request, res: Response) => {
  */
 app.get('/api/active-task', (req: Request, res: Response) => {
     const incomingSecret = req.headers['x-api-key'];
-    const expectedSecret = process.env.REACT_APP_SCN_API_SECRET_KEY;
+    const expectedSecret = config.SCN_API_SECRET_KEY;
     if (!incomingSecret || incomingSecret !== expectedSecret) {
         return res.status(401).json({ error: 'Authentication failed.' });
     }
@@ -123,7 +119,7 @@ app.get('/api/active-task', (req: Request, res: Response) => {
  */
 app.post('/api/reset', (req: Request, res: Response) => {
     const incomingSecret = req.headers['x-api-key'];
-    const expectedSecret = process.env.REACT_APP_SCN_API_SECRET_KEY;
+    const expectedSecret = config.SCN_API_SECRET_KEY;
     if (!incomingSecret || incomingSecret !== expectedSecret) {
         return res.status(401).json({ error: 'Authentication failed.' });
     }
@@ -143,7 +139,7 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
 
     // 1. Secret Key Validation
     const incomingSecret = req.headers['x-api-key'];
-    const expectedSecret = process.env.REACT_APP_SCN_API_SECRET_KEY;
+    const expectedSecret = config.SCN_API_SECRET_KEY;
 
     if (!incomingSecret || incomingSecret !== expectedSecret) {
         console.error(`[API] Rejecting request: Invalid or missing X-API-KEY.`);

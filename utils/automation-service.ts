@@ -259,7 +259,7 @@ export class AutomationService {
     private static cachedTargetSystemId: number | null = null;
     static async fetchTargetSystemId(): Promise<number> {
         if (this.cachedTargetSystemId !== null) return this.cachedTargetSystemId;
-        const baseUrl = (process.env.REACT_APP_biofuelcircle_API_BASE_URL || 'https://api-dev-next.biofuelcircle.com/api/v1').replace(/\/$/, '');
+        const baseUrl = config.BFC_API_URL.replace(/\/$/, '');
         const url = `${baseUrl}/reference/lookupdata/?category=automation_task_type`;
 
         try {
@@ -290,7 +290,7 @@ export class AutomationService {
     }
 
     static async getAutomationToken(targetSystem: number, username: string) {
-        const baseUrl = (process.env.REACT_APP_biofuelcircle_API_BASE_URL || 'https://api-dev-next.biofuelcircle.com/api/v1').replace(/\/$/, '');
+        const baseUrl = config.BFC_API_URL.replace(/\/$/, '');
         const url = `${baseUrl}/automation_token/?target_system=${targetSystem}&username=${encodeURIComponent(username)}`;
         try {
             // console.log(`[Service] Fetching Automation Token from: ${url}`);
@@ -323,7 +323,7 @@ export class AutomationService {
      * static helper for the Trigger API to decide between CONTINUE and LOGIN_AND_POST
      */
     static async checkTokenStatus(username: string, targetSystem: string): Promise<{ exists: boolean; id?: number }> {
-        const baseUrl = (process.env.REACT_APP_biofuelcircle_API_BASE_URL || 'https://api-dev-next.biofuelcircle.com/api/v1').replace(/\/$/, '');
+        const baseUrl = config.BFC_API_URL.replace(/\/$/, '');
         const url = `${baseUrl}/automation_token/?target_system=${targetSystem}&username=${encodeURIComponent(username)}`;
 
         try {

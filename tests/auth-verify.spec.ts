@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures/auth.fixture';
 
 test('Verify Authentication Bypass', async ({ page }) => {
-    const dashboardUrl = `https://${process.env.DOMAIN_NAME}/dashboard`; 
+    const dashboardUrl = `https://${process.env.DOMAIN_NAME}/dashboard`;
 
     // Verify we are on the dashboard page
     await expect(page).toHaveURL(/.*\/homepage\/dashboard/);
