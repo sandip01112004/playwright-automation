@@ -18,7 +18,7 @@ const ErrorScreen: React.FC<ErrorScreenProps> = ({ message, scn, onReset }) => {
                     <div className="scn-value">{scn}</div>
                 </div>
             )}
-            
+
             {onReset && (
                 <div style={{ marginTop: '2rem' }}>
                     <button className="reset-button" onClick={onReset}>

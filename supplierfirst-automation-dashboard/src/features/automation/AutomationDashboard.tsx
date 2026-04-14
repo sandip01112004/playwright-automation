@@ -149,7 +149,7 @@ const AutomationDashboard: React.FC = () => {
             const timer = setTimeout(() => {
                 window.history.pushState({}, '', window.location.pathname);
                 setTaskId(null);
-            }, 3000);
+            }, 30000);
             return () => clearTimeout(timer);
         }
     }, [task, taskId, lookupData]);

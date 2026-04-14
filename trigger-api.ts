@@ -278,7 +278,7 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
                     console.log(`[API] Clearing Discovery memory for Task ${taskIdStr} (Grace period expired)`);
                     lastActiveTask = null;
                 }
-            }, 15000);
+            }, 30000);
         }
     });
 });
