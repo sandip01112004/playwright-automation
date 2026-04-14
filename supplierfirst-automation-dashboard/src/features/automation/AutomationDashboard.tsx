@@ -263,7 +263,7 @@ const AutomationDashboard: React.FC = () => {
         if (isStatus('processing') || isStatus('otp_provided')) {
             return <LoadingScreen message={
                 isStatus('otp_provided')
-                    ? 'OTP Submitted. Resuming automation...'
+                    ? 'OTP Submitted. continuing automation...'
                     : 'Automating SupplierFirst...'
             } />;
         }

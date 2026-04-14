@@ -43,7 +43,7 @@ export class OTPVerificationPage {
         // Wait until the URL no longer contains 'verifyOTP', meaning a successful login or redirect
         try {
             await this.page.waitForURL((url) => !url.href.includes('verifyOTP'), {
-                timeout: config.WAIT_TIMEOUT || 60000
+                timeout: 60000
             });
         } catch (error: any) {
             // Check if we are still on the verifyOTP page after timeout
