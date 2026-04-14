@@ -159,26 +159,5 @@ export const useTaskPolling = (taskId: number | null) => {
         };
     }, [taskId, fetchTaskStatus, isTerminalStatus, lookupData.length]);
 
-    const submitOtp = async (otp: string, skipOtpUpdate: boolean = false) => {
-        if (taskId === null) return;
-        try {
-            if (skipOtpUpdate) {
-                await taskApi.updateTaskStatus(taskId, 'otp_provided');
-            } else {
-                await taskApi.updateTaskOtp(taskId, otp, 'otp_provided');
-            }
-            // Optimistically update local state using the helper to get the ID
-            if (task) {
-                const statusId = taskApi.getStatusId('otp_provided');
-                if (statusId) {
-                    setTask({ ...task, status: statusId, otp: skipOtpUpdate ? task.otp : otp });
-                }
-            }
-        } catch (err) {
-            setError(getFriendlyErrorMessage(err));
-            throw err;
-        }
-    };
-
-    return { task, lookupData, logs, loading, error, isReconnecting, submitOtp };
+    return { task, lookupData, logs, loading, error, isReconnecting };
 };

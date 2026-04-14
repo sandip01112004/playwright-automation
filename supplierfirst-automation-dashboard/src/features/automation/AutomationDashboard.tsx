@@ -133,7 +133,7 @@ const AutomationDashboard: React.FC = () => {
         window.location.reload();
     }, []);
 
-    const { task, lookupData, logs, loading, error, isReconnecting, submitOtp } = useTaskPolling(taskId);
+    const { task, lookupData, logs, loading, error, isReconnecting } = useTaskPolling(taskId);
 
     // Auto-reset to Idle when task is finished
     React.useEffect(() => {
@@ -272,7 +272,7 @@ const AutomationDashboard: React.FC = () => {
             return (
                 <div className="otp-auto-fetch-container">
                     <OtpInputScreen
-                        onSubmit={submitOtp}
+
                         defaultOtp={task?.otp || ''}
                     />
                     <div className="auto-fetch-status">

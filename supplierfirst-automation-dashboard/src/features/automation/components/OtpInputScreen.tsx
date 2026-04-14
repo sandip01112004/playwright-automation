@@ -1,45 +1,20 @@
 import React, { useState, useEffect } from 'react';
 
 interface OtpInputScreenProps {
-    onSubmit: (otp: string, skipOtpUpdate?: boolean) => Promise<void>;
     defaultOtp?: string;
 }
 
-const OtpInputScreen: React.FC<OtpInputScreenProps> = ({ onSubmit, defaultOtp = '' }) => {
+const OtpInputScreen: React.FC<OtpInputScreenProps> = ({ defaultOtp = '' }) => {
     const [otp, setOtp] = useState(defaultOtp);
-    const [submitting, setSubmitting] = useState(false);
-
-    const handleSubmit = async (e?: React.FormEvent, overrideOtp?: string, isAuto?: boolean) => {
-        if (e) e.preventDefault();
-        const finalOtp = overrideOtp || otp;
-        if (finalOtp.length < 4 || submitting) return;
-
-        setSubmitting(true);
-        try {
-            await onSubmit(finalOtp, isAuto);
-        } catch (err) {
-            setSubmitting(false);
-        }
-    };
 
     useEffect(() => {
-        if (defaultOtp && defaultOtp.length === 6 && !submitting) {
-            setOtp(defaultOtp);
-            console.log('[OtpInputScreen] Automated OTP detected. Triggering auto-verify...');
-            handleSubmit(undefined, defaultOtp, true);
-        } else if (defaultOtp) {
-            setOtp(defaultOtp);
-        }
-    }, [defaultOtp, submitting]);
+        setOtp(defaultOtp || '');
+    }, [defaultOtp]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value.replace(/\D/g, ''); // Only digits
         if (value.length <= 6) {
             setOtp(value);
-            // Auto-submit if 6 digits are reached
-            if (value.length === 6 && !submitting) {
-                handleSubmit(undefined, value);
-            }
         }
     };
 
@@ -48,19 +23,22 @@ const OtpInputScreen: React.FC<OtpInputScreenProps> = ({ onSubmit, defaultOtp = 
             <div className="status-badge await">Action Required</div>
             <h2>Enter OTP</h2>
             <p>Please enter the verification code sent from the supplierfirst portal.</p>
-            <form onSubmit={handleSubmit} className="otp-form">
+            <form className="otp-form" onSubmit={(e) => e.preventDefault()}>
                 <input
                     type="text"
                     placeholder="000000"
                     value={otp}
                     onChange={handleInputChange}
                     maxLength={6}
-                    disabled={submitting}
+                    disabled={true}
                     autoFocus
                 />
-                <button type="submit" disabled={submitting || otp.length < 4}>
-                    {submitting ? 'Verifying...' : 'Verify OTP'}
-                </button>
+                {otp && (
+                    <div style={{ marginTop: '15px', color: '#60a5fa', fontSize: '0.9rem', fontWeight: 500 }}>
+                        <div className="pulse-dot tiny" style={{ display: 'inline-block', marginRight: '8px' }}></div>
+                        OTP received. Proceeding automatically...
+                    </div>
+                )}
             </form>
         </div>
     );

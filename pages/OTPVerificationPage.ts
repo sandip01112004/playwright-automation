@@ -41,8 +41,16 @@ export class OTPVerificationPage {
         await this.verifyButton.click();
 
         // Wait until the URL no longer contains 'verifyOTP', meaning a successful login or redirect
-        await this.page.waitForURL((url) => !url.href.includes('verifyOTP'), { 
-            timeout: config.WAIT_TIMEOUT || 60000 
-        });
+        try {
+            await this.page.waitForURL((url) => !url.href.includes('verifyOTP'), {
+                timeout: config.WAIT_TIMEOUT || 60000
+            });
+        } catch (error: any) {
+            // Check if we are still on the verifyOTP page after timeout
+            if (this.page.url().includes('verifyOTP')) {
+                throw new Error('Invalid OTP provided or verification failed: The portal did not redirect after submission.');
+            }
+            throw error;
+        }
     }
 }

@@ -93,22 +93,7 @@ export const taskApi = {
         }
     },
 
-    updateTaskOtp: async (taskId: number, otp: string, statusKey: string = 'otp_provided'): Promise<TaskData> => {
-        const statusId = lookupCache[statusKey.toLowerCase()];
 
-        if (!statusId) {
-            console.error(`[taskApi] Status key "${statusKey}" not found in cache. Available:`, Object.keys(lookupCache));
-            throw new Error(`Invalid status key: ${statusKey}`);
-        }
-
-        const response = await axios.patch(`${API_BASE_URL}/automation_task/${taskId}/`, {
-            otp,
-            status: statusId
-        }, {
-            headers: authHeaders,
-        });
-        return response.data.data || response.data;
-    },
 
     updateTaskStatus: async (taskId: number, statusKey: string): Promise<TaskData> => {
         const statusId = lookupCache[statusKey.toLowerCase()];
@@ -137,8 +122,8 @@ export const taskApi = {
      * Discovery: Fetch the most recently triggered task from the Trigger API
      */
     getActiveTask: async (): Promise<{ taskId: string | null; status: string } | null> => {
-        const TRIGGER_API_URL = process.env.REACT_APP_TRIGGER_API_URL || 'http://localhost:3001';
-        const SECRET_KEY = process.env.REACT_APP_SCN_API_SECRET_KEY || '';
+        const TRIGGER_API_URL = process.env.REACT_APP_TRIGGER_API_URL;
+        const SECRET_KEY = process.env.REACT_APP_SCN_API_SECRET_KEY;
 
         try {
             const response = await axios.get(`${TRIGGER_API_URL}/api/active-task`, {

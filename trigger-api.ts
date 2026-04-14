@@ -143,7 +143,7 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
 
     // 1. Secret Key Validation
     const incomingSecret = req.headers['x-api-key'];
-    const expectedSecret = process.env.SCN_API_SECRET_KEY;
+    const expectedSecret = process.env.REACT_APP_SCN_API_SECRET_KEY;
 
     if (!incomingSecret || incomingSecret !== expectedSecret) {
         console.error(`[API] Rejecting request: Invalid or missing X-API-KEY.`);
