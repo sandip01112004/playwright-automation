@@ -17,11 +17,12 @@ To run this project using Docker, follow these steps:
     ```
 
 3.  **Access the Dashboard**:
-    Open [http://localhost:5000](http://localhost:5000) in your browser.
+    Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 4.  **Run Tests**:
-    Click "Start Test" on the dashboard. The tests will run in "headless" mode inside the container. 
-    You can view the results at [http://localhost:5000/report](http://localhost:5000/report) once finished.
+    The system waits for a trigger at `http://localhost:3001/api/trigger`.
+    The Dashboard will automatically detect active tasks and show the UI.
+    You can view the reports in the `playwright-report` folder on your host machine.
 
 ## Notes
 - To run in **headed** mode (if you have an X11 server or VNC set up), change `HEADLESS=true` to `HEADLESS=false` in `docker-compose.yml`. However, for most users, headless is the way to go in Docker.
