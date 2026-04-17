@@ -150,6 +150,37 @@ app.get('/api/logs/:taskId', (req: Request, res: Response) => {
 
 
 /**
+ * ACTIVE TASK ENDPOINT (Discovery)
+ */
+app.get('/api/active-task', (req: Request, res: Response) => {
+    const incomingSecret = req.headers['x-api-key'];
+    const expectedSecret = config.SCN_API_SECRET_KEY;
+    if (!incomingSecret || incomingSecret !== expectedSecret) {
+        return res.status(401).json({ error: 'Authentication failed.' });
+    }
+
+    if (!lastActiveTask) {
+        return res.json({ taskId: null, status: 'IDLE' });
+    }
+    res.json(lastActiveTask);
+});
+
+/**
+ * RESET ENDPOINT (Clears stale tasks)
+ */
+app.post('/api/reset', (req: Request, res: Response) => {
+    const incomingSecret = req.headers['x-api-key'];
+    const expectedSecret = config.SCN_API_SECRET_KEY;
+    if (!incomingSecret || incomingSecret !== expectedSecret) {
+        return res.status(401).json({ error: 'Authentication failed.' });
+    }
+
+    console.log('[API] Resetting discovery state...');
+    lastActiveTask = null;
+    res.json({ status: 'OK', message: 'System discovery reset.' });
+});
+
+/**
  * TRIGGER ENDPOINT
  */
 app.post('/api/trigger', async (req: Request, res: Response) => {
