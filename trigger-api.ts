@@ -29,6 +29,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Set up the path to the React dashboard build folder
+const BUILD_PATH = path.join(__dirname, 'supplierfirst-automation-dashboard', 'build');
+
+// In production, serve the React dashboard static files
+if (process.env.NODE_ENV === 'production') {
+    console.log(`[System] Production mode: Serving UI from ${BUILD_PATH}`);
+    app.use(express.static(BUILD_PATH));
+}
+
 // In-memory log storage
 const taskLogs = new Map<string, string[]>();
 
@@ -162,7 +171,7 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
     // 3. Automation Token Logic
     console.log(`[API] Checking automation token for Task ${taskIdStr}...`);
     const targetSystem = await AutomationService.fetchTargetSystemId();
-    const username = process.env.SUPPLIER_NAME || 'unknown';
+    const username = config.SUPPLIER_NAME;
 
     const tokenStatus = await AutomationService.checkTokenStatus(username, targetSystem.toString());
     let flowAction = 'CONTINUE';
@@ -221,9 +230,8 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
             ...process.env,
             TASK_ID: taskIdStr,
             TASK_PAYLOAD: encodedPayload,
-            BFC_API_TOKEN: process.env.REACT_APP_biofuelcircle_API_TOKEN || '',
-            // Also pass the new name explicitly to the worker environment if needed
-            REACT_APP_biofuelcircle_API_TOKEN: process.env.REACT_APP_biofuelcircle_API_TOKEN || '',
+            BFC_API_TOKEN: config.BFC_API_TOKEN,
+            REACT_APP_biofuelcircle_API_TOKEN: config.BFC_API_TOKEN,
             FLOW_ACTION: flowAction,
             DOTENV_CONFIG_QUIET: 'true',
             FORCE_COLOR: '1'
@@ -282,6 +290,18 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
         }
     });
 });
+
+/**
+ * PRODUCTION FALLBACK
+ * For any non-API request, serve the React index.html to support client-side routing.
+ */
+if (process.env.NODE_ENV === 'production') {
+    app.get('*', (req, res) => {
+        if (!req.path.startsWith('/api')) {
+            res.sendFile(path.join(BUILD_PATH, 'index.html'));
+        }
+    });
+}
 
 const PORT = config.TRIGGER_API_PORT;
 app.listen(PORT, () => {
