@@ -2,23 +2,21 @@ import axios from 'axios';
 import { TaskData, LookupData } from '../types/automation.types';
 
 // Utility to enforce environment variables in the frontend
-const getRequiredEnv = (key: string): string => {
+const getRequiredEnv = (key: string, defaultValue: string = ''): string => {
     const value = process.env[key];
     if (!value) {
-        const errorMsg = `[Config Error] Missing required environment variable: ${key}. 
-Check your dashboard's .env file or deployment settings.`;
-        console.error(errorMsg);
-        throw new Error(errorMsg);
+        console.warn(`[Config Warning] Missing environment variable: ${key}. Using default: "${defaultValue}"`);
+        return defaultValue;
     }
     return value;
 };
 
 // In Create React App, variables MUST start with REACT_APP_ to be visible in the browser
-const rawUrl = getRequiredEnv('REACT_APP_TRIGGER_API_URL');
-const TRIGGER_API_URL = rawUrl.replace(/\/$/, '');
+// Default to the current origin if the API URL is missing (Standard for unified hosting)
+const TRIGGER_API_URL = getRequiredEnv('REACT_APP_TRIGGER_API_URL', window.location.origin).replace(/\/$/, '');
 const API_BASE_URL = `${TRIGGER_API_URL}/api/proxy`;
-const API_TOKEN = getRequiredEnv('REACT_APP_biofuelcircle_API_TOKEN');
-const SECRET_KEY = getRequiredEnv('REACT_APP_SCN_API_SECRET_KEY');
+const API_TOKEN = getRequiredEnv('REACT_APP_biofuelcircle_API_TOKEN', 'missing-token');
+const SECRET_KEY = getRequiredEnv('REACT_APP_SCN_API_SECRET_KEY', 'missing-secret');
 
 const commonHeaders = {
     'Content-Type': 'application/json',
@@ -129,24 +127,6 @@ export const taskApi = {
      */
     getStatusId: (key: string): number | undefined => {
         return lookupCache[key.toLowerCase()];
-    },
-
-    /**
-     * Discovery: Fetch the most recently triggered task from the Trigger API
-     */
-    getActiveTask: async (): Promise<{ taskId: string | null; status: string } | null> => {
-
-        try {
-            const response = await axios.get(`${TRIGGER_API_URL}/api/active-task`, {
-                headers: {
-                    ...commonHeaders,
-                    'x-api-key': SECRET_KEY
-                }
-            });
-            return response.data;
-        } catch (error) {
-            return null;
-        }
     },
 
     /**

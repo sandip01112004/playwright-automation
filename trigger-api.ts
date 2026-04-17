@@ -41,9 +41,6 @@ if (process.env.NODE_ENV === 'production') {
 // In-memory log storage
 const taskLogs = new Map<string, string[]>();
 
-// Tracking for "Active Task Discovery"
-let lastActiveTask: { taskId: string; status: 'STARTING' | 'ACTIVE' | 'FINISHED' | 'FAILED' } | null = null;
-
 // SSE Client Management
 let sseClients: Response[] = [];
 
@@ -151,36 +148,6 @@ app.get('/api/logs/:taskId', (req: Request, res: Response) => {
     res.json({ taskId, logs });
 });
 
-/**
- * ACTIVE TASK ENDPOINT (Discovery)
- */
-app.get('/api/active-task', (req: Request, res: Response) => {
-    const incomingSecret = req.headers['x-api-key'];
-    const expectedSecret = config.SCN_API_SECRET_KEY;
-    if (!incomingSecret || incomingSecret !== expectedSecret) {
-        return res.status(401).json({ error: 'Authentication failed.' });
-    }
-
-    if (!lastActiveTask) {
-        return res.json({ taskId: null, status: 'IDLE' });
-    }
-    res.json(lastActiveTask);
-});
-
-/**
- * RESET ENDPOINT (Clears stale tasks)
- */
-app.post('/api/reset', (req: Request, res: Response) => {
-    const incomingSecret = req.headers['x-api-key'];
-    const expectedSecret = config.SCN_API_SECRET_KEY;
-    if (!incomingSecret || incomingSecret !== expectedSecret) {
-        return res.status(401).json({ error: 'Authentication failed.' });
-    }
-
-    console.log('[API] Resetting discovery state...');
-    lastActiveTask = null;
-    res.json({ status: 'OK', message: 'System discovery reset.' });
-});
 
 /**
  * TRIGGER ENDPOINT
@@ -240,9 +207,6 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
     console.log(`[Flow] Action: ${flowAction}`);
     console.log(`************************************************\n`);
 
-    // 4. Update Global Discovery State
-    lastActiveTask = { taskId: taskIdStr, status: 'STARTING' };
-
     // 5. Respond to BFC
     res.status(202).json({
         message: 'Task accepted.',
@@ -255,15 +219,6 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
     console.log(`[SSE] Broadcasting trigger for Task ${taskIdStr}...`);
     broadcast({ type: 'task_triggered', taskId: taskIdStr });
 
-    // --- NEW: Neutralize Task Status immediately ---
-    // This prevents the Dashboard from seeing the "failed" status from a previous run
-    try {
-        const automationService = new AutomationService(task_id);
-        await automationService.updateTaskStatus('processing');
-    } catch (err: any) {
-        console.warn(`[API] Failed to pre-neutralize Task ${task_id} status: ${err.message}`);
-    }
-    // ----------------------------------------------
 
     // 6. Launch Playwright Worker
     const payloadString = JSON.stringify(payload);
@@ -307,35 +262,15 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
     pwProcess.on('error', (err) => {
         appendLog(`[System] Failed to start Playwright process: ${err.message}`);
         console.error(`[Worker] Failed to start Playwright process for Task ${task_id}:`, err);
-        if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
-            lastActiveTask.status = 'FAILED';
-        }
     });
 
     pwProcess.on('spawn', () => {
-        if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
-            lastActiveTask.status = 'ACTIVE';
-        }
     });
 
     pwProcess.on('close', (code) => {
         const status = code === 0 ? 'FINISHED' : 'FAILED';
         appendLog(`[System] Playwright process finished with code ${code} (${status})`);
         console.log(`[Worker] Playwright process for Task ${task_id} finished with code ${code}`);
-
-        // Update discovery state to finished or failed
-        if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
-            lastActiveTask.status = status;
-
-            // Keep discovery status for 15 seconds so the UI definitely sees it
-            // Only clear if the task ID hasn't changed (prevents race conditions)
-            setTimeout(() => {
-                if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
-                    console.log(`[API] Clearing Discovery memory for Task ${taskIdStr} (Grace period expired)`);
-                    lastActiveTask = null;
-                }
-            }, 30000);
-        }
     });
 });
 
@@ -347,22 +282,23 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
 app.use(express.static(BUILD_PATH));
 
 // SPA Support: Catch-all route to serve index.html for any non-API routes
-app.get('*', (req, res) => {
+app.use((req, res, next) => {
     if (!req.path.startsWith('/api')) {
         res.sendFile(path.join(BUILD_PATH, 'index.html'), (err) => {
             if (err) {
                 res.status(404).send("Dashboard build (dist) not found. Please ensure the project is built.");
             }
         });
+    } else {
+        next();
     }
 });
 
-const PORT = config.TRIGGER_API_PORT;
+const PORT = config.PORT;
 app.listen(PORT, () => {
     console.log(`\n================================================`);
     console.log(`Automation Trigger API Running`);
     console.log(`Endpoint: http://localhost:${PORT}/api/trigger`);
-    console.log(`Discovery: http://localhost:${PORT}/api/active-task`);
     console.log(`================================================\n`);
 }).on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {

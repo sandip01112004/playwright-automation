@@ -259,15 +259,23 @@ export class AutomationService {
     private static cachedTargetSystemId: number | null = null;
     static async fetchTargetSystemId(): Promise<number> {
         if (this.cachedTargetSystemId !== null) return this.cachedTargetSystemId;
+
         const baseUrl = config.BFC_API_URL.replace(/\/$/, '');
         const url = `${baseUrl}/reference/lookupdata/?category=automation_task_type`;
 
         try {
             console.log(`[Service] Fetching Target System ID from: ${url}`);
+
+            // Replicate exactly what the successful Proxy does
+            const host = new URL(baseUrl).host;
+
             const response = await axios.get(url, {
                 headers: {
                     'Authorization': `Bearer ${config.BFC_API_TOKEN}`,
                     'Accept': 'application/json',
+                    'host': host,
+                    'origin': baseUrl,
+                    'referer': `${baseUrl}/`,
                     'ngrok-skip-browser-warning': 'true'
                 }
             });
@@ -283,9 +291,14 @@ export class AutomationService {
 
             throw new Error('Target system "scn_automation" not found in lookup data.');
         } catch (err: any) {
-            console.error(`[AutomationService] Failed to fetch Target System ID: ${err.message}`);
-            // Fallback to environment variable if lookup fails
-            return Number(config.TARGET_SYSTEM_ID);
+            const status = err.response?.status;
+            const data = err.response?.data;
+            console.error(`[AutomationService] Failed to fetch Target System ID from API: ${err.message}`);
+            if (status) {
+                console.error(`[AutomationService] Response Status: ${status}`);
+                console.error(`[AutomationService] Response Data: ${JSON.stringify(data).substring(0, 500)}`);
+            }
+            throw err;
         }
     }
 

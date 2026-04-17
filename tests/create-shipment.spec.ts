@@ -15,15 +15,11 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload 
     const shipmentFormPage = new ShipmentFormPage(page);
     const fileService = new FileService();
 
+    // Create a unique directory for this task's documents
+    const taskDocsDir = path.join('data/docs', taskId.toString());
+    const absoluteTaskDocsDir = path.resolve(process.cwd(), taskDocsDir);
 
     try {
-
-        // Clear docs folder to ensure we're using fresh files
-        const docsDir = path.resolve(process.cwd(), 'data/docs');
-        if (fs.existsSync(docsDir)) {
-            fs.readdirSync(docsDir).forEach(file => fs.unlinkSync(path.join(docsDir, file)));
-        }
-
         // Handle Post-Login Setup 
         console.log('[Test] Entering handlePostLoginSetup...');
         await dashboardPage.handlePostLoginSetup();
@@ -54,12 +50,10 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload 
                 throw new Error('Invoice or Delivery data missing in trigger payload.');
             }
 
-
             const deliveryMedia = payload.delivery.delivery_media?.[0];
             if (!deliveryMedia) {
                 throw new Error('No delivery media found in payload.');
             }
-
 
             const invoiceUrl = payload.invoice.presigned_url;
             const invoiceNumber = payload.invoice.invoice_number;
@@ -84,13 +78,13 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload 
    - Invoice: ${invoiceFileName}
    - Delivery: ${deliveryFileName}`);
 
+            const [invoicePath, deliveryPath] = await Promise.all([
+                fileService.downloadFile(invoiceUrl, invoiceFileName, taskDocsDir),
+                fileService.downloadFile(deliveryUrl, deliveryFileName, taskDocsDir)
+            ]);
+
             const quantityKg = parseFloat(payload.delivery.quantity);
             const quantityMt = quantityKg / 1000;
-
-            const [invoicePath, deliveryPath] = await Promise.all([
-                fileService.downloadFile(invoiceUrl, invoiceFileName),
-                fileService.downloadFile(deliveryUrl, deliveryFileName)
-            ]);
 
             console.log('[Step 2] Filling out the shipment form details...');
             await shipmentFormPage.completeShipmentForm({
@@ -103,28 +97,37 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload 
             });
         });
 
-        // Step 3: Report Completion
-        console.log('[Step 3] Submitting task completion status: completed');
-        await automationService.updateTaskStatus('completed'); // completed
+        await test.step('Step 3: Update Task Status', async () => {
+            console.log('[Step 3] Submitting task completion status: completed');
+            await automationService.updateTaskStatus('completed');
+        });
+
         console.log(`[Test] Task ${taskId} finished successfully.`);
 
-    } catch (err: any) {
-        console.error(`\n--- Automation Failed: ${err.message} ---`);
-        // Report Failure to your API
-        await automationService.updateTaskStatus('failed', { error_message: err.message });
-        throw err; // Ensure Playwright marks the test as failed
+    } catch (error: any) {
+        console.error(`[Test] Automation Failed: ${error.message} ---`);
+
+        // Update task status to failed on error
+        try {
+            await automationService.updateTaskStatus('failed', error.message);
+        } catch (statusError) {
+            console.error('[Test] Failed to update failure status:', statusError);
+        }
+
+        throw error;
     } finally {
-        // Clear docs folder after test completion (Industrial Standard: Keep environment clean)
-        const docsDir = path.resolve(process.cwd(), 'data/docs');
-        if (fs.existsSync(docsDir)) {
-            fs.readdirSync(docsDir).forEach(file => {
-                const filePath = path.join(docsDir, file);
-                try {
-                    fs.unlinkSync(filePath);
-                } catch (e) {
-                    console.error(`[Cleanup] Failed to delete file: ${filePath}`);
+        // Cleanup task-specific directory
+        try {
+            if (fs.existsSync(absoluteTaskDocsDir)) {
+                console.log(`[Test] Cleaning up documents in ${taskDocsDir}...`);
+                const files = fs.readdirSync(absoluteTaskDocsDir);
+                for (const file of files) {
+                    fs.unlinkSync(path.join(absoluteTaskDocsDir, file));
                 }
-            });
+                fs.rmdirSync(absoluteTaskDocsDir);
+            }
+        } catch (cleanupError) {
+            console.error('[Test] Failed to clean up task directory:', cleanupError);
         }
     }
 });
