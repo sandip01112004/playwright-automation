@@ -41,9 +41,6 @@ if (process.env.NODE_ENV === 'production') {
 // In-memory log storage
 const taskLogs = new Map<string, string[]>();
 
-// Tracking for "Active Task Discovery"
-let lastActiveTask: { taskId: string; status: 'STARTING' | 'ACTIVE' | 'FINISHED' | 'FAILED' } | null = null;
-
 // SSE Client Management
 let sseClients: Response[] = [];
 
@@ -152,36 +149,7 @@ app.get('/api/logs/:taskId', (req: Request, res: Response) => {
 });
 
 
-/**
- * ACTIVE TASK ENDPOINT (Discovery)
- */
-app.get('/api/active-task', (req: Request, res: Response) => {
-    const incomingSecret = req.headers['x-api-key'];
-    const expectedSecret = config.SCN_API_SECRET_KEY;
-    if (!incomingSecret || incomingSecret !== expectedSecret) {
-        return res.status(401).json({ error: 'Authentication failed.' });
-    }
 
-    if (!lastActiveTask) {
-        return res.json({ taskId: null, status: 'IDLE' });
-    }
-    res.json(lastActiveTask);
-});
-
-/**
- * RESET ENDPOINT (Clears stale tasks)
- */
-app.post('/api/reset', (req: Request, res: Response) => {
-    const incomingSecret = req.headers['x-api-key'];
-    const expectedSecret = config.SCN_API_SECRET_KEY;
-    if (!incomingSecret || incomingSecret !== expectedSecret) {
-        return res.status(401).json({ error: 'Authentication failed.' });
-    }
-
-    console.log('[API] Resetting discovery state...');
-    lastActiveTask = null;
-    res.json({ status: 'OK', message: 'System discovery reset.' });
-});
 
 /**
  * TRIGGER ENDPOINT
@@ -241,9 +209,6 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
     console.log(`[Flow] Action: ${flowAction}`);
     console.log(`************************************************\n`);
 
-    // 4. Update Global Discovery State
-    lastActiveTask = { taskId: taskIdStr, status: 'STARTING' };
-
     // 5. Respond to BFC
     res.status(202).json({
         message: 'Task accepted.',
@@ -302,28 +267,12 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
     });
 
     pwProcess.on('spawn', () => {
-        if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
-            lastActiveTask.status = 'ACTIVE';
-        }
     });
 
     pwProcess.on('close', (code) => {
         const status = code === 0 ? 'FINISHED' : 'FAILED';
         appendLog(`[System] Playwright process finished with code ${code} (${status})`);
         console.log(`[Worker] Playwright process for Task ${task_id} finished with code ${code}`);
-
-        // Update discovery state to finished or failed
-        if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
-            lastActiveTask.status = status;
-
-            // Keep discovery status for 30 seconds so the UI definitely sees it
-            setTimeout(() => {
-                if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
-                    console.log(`[API] Clearing Discovery memory for Task ${taskIdStr} (Grace period expired)`);
-                    lastActiveTask = null;
-                }
-            }, 30000);
-        }
     });
 });
 
