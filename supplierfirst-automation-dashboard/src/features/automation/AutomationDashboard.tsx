@@ -170,7 +170,7 @@ const AutomationDashboard: React.FC = () => {
 
         if (isTaskFailed) {
             return (
-                <div className="dashboard-container">
+                <div className="automation-feature">
                     <ErrorScreen
                         message={task.error_message || error}
                         scn={(task as any)?.tracking_reference || (task as any)?.scn}
@@ -182,7 +182,7 @@ const AutomationDashboard: React.FC = () => {
 
         // Otherwise show the polling error (e.g. "Connection lost")
         return (
-            <div className="dashboard-container">
+            <div className="automation-feature">
                 <ErrorScreen
                     message={error}
                     scn={(task as any)?.tracking_reference || (task as any)?.scn}

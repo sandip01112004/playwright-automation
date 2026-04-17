@@ -140,7 +140,10 @@ export const useTaskPolling = (taskId: number | null) => {
                     setIsReconnecting(true);
                 }
 
-                if (consecutiveFailures >= MAX_FAILURES) {
+                if (consecutiveFailures >= MAX_FAILURES || err.response?.status === 404) {
+                    if (err.response?.status === 404) {
+                        console.log(`[useTaskPolling] Task ${taskId} not found. Stopping polling.`);
+                    }
                     // Only show "Connection Lost" if we don't have a terminal result already
                     const isTaskFailed = currentTask && lookupData.some(l =>
                         String(l.value || l.name).toLowerCase() === 'failed' && l.id === Number(currentTask.status)

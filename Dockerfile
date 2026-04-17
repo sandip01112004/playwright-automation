@@ -41,7 +41,7 @@ EXPOSE 3000
 
 # Health check against the logs endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s \
-  CMD curl -sf http://localhost:3000/api/logs/healthcheck > /dev/null || exit 1
+  CMD curl -sf http://localhost:${PORT}/api/logs/healthcheck > /dev/null || exit 1
 
 # Start the integrated server
 CMD ["npx", "ts-node", "trigger-api.ts"]
