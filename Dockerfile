@@ -1,56 +1,32 @@
-# ==================== Stage 1: Build React Dashboard ====================
-FROM node:20-slim AS dashboard-builder
-
-WORKDIR /app/dashboard
-
-# Accept BFC API URLs as build args so they're baked into the React bundle correctly
-# Values must be provided via .env and docker-compose build.args — no defaults here
-ARG REACT_APP_TRIGGER_API_URL
-ARG REACT_APP_biofuelcircle_API_BASE_URL
-
-ENV REACT_APP_TRIGGER_API_URL=$REACT_APP_TRIGGER_API_URL
-ENV REACT_APP_biofuelcircle_API_BASE_URL=$REACT_APP_biofuelcircle_API_BASE_URL
-
-COPY supplierfirst-automation-dashboard/package*.json ./
-RUN npm ci
-
-COPY supplierfirst-automation-dashboard/ ./
-RUN npm run build
-
-# ==================== Stage 2: Runtime ====================
+# Use the official Playwright image as the base
+# This image contains all necessary browsers and system dependencies
 FROM mcr.microsoft.com/playwright:v1.58.2-jammy
 
 WORKDIR /app
 
-# Install root dependencies (API + Playwright)
+# 1. Install root dependencies (API & Automation)
+# Copy only package files first to optimize layer caching
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
-# Install serve to host the static React build
-RUN npm install -g serve
+# 2. Install dashboard dependencies
+# Copy only package files first to optimize layer caching
+COPY supplierfirst-automation-dashboard/package*.json ./supplierfirst-automation-dashboard/
+RUN cd supplierfirst-automation-dashboard && npm install
 
-# Copy application source files
-COPY tsconfig.json ./
-COPY playwright.config.ts ./
-COPY trigger-api.ts ./
-COPY types/ ./types/
-COPY utils/ ./utils/
-COPY fixtures/ ./fixtures/
-COPY pages/ ./pages/
-COPY tests/ ./tests/
+# 3. Copy the rest of the application code
+COPY . .
 
-# Copy built React dashboard from Stage 1
-COPY --from=dashboard-builder /app/dashboard/build ./dashboard-build
-
+# 4. Expose the dashboard (3000) and the API (3001)
 EXPOSE 3000 3001
 
+# 5. Set default environment variables
+# These can be overridden by docker-compose or .env file
 ENV HEADLESS=true
-ENV PORT=3001
+ENV NODE_ENV=development
+ENV PORT=3000
+ENV TRIGGER_API_PORT=3001
 
-# Health check against the logs endpoint — returns 200 for any taskId, even unknown ones
-HEALTHCHECK --interval=30s --timeout=10s --start-period=20s \
-  CMD curl -sf http://localhost:3001/api/logs/healthcheck > /dev/null || exit 1
-
-CMD ["npx", "concurrently", \
-     "npx ts-node trigger-api.ts", \
-     "serve -s dashboard-build -l 3000 --no-clipboard"]
+# 6. Start both processes concurrently using the cross-platform script
+# This will also copy the .env file to the dashboard folder correctly
+CMD ["npm", "run", "start:all"]

@@ -1,12 +1,24 @@
 import axios from 'axios';
 import { TaskData, LookupData } from '../types/automation.types';
 
+// Utility to enforce environment variables in the frontend
+const getRequiredEnv = (key: string): string => {
+    const value = process.env[key];
+    if (!value) {
+        const errorMsg = `[Config Error] Missing required environment variable: ${key}. 
+Check your dashboard's .env file or deployment settings.`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
+    }
+    return value;
+};
+
 // In Create React App, variables MUST start with REACT_APP_ to be visible in the browser
-const rawUrl = process.env.REACT_APP_TRIGGER_API_URL || '';
+const rawUrl = getRequiredEnv('REACT_APP_TRIGGER_API_URL');
 const TRIGGER_API_URL = rawUrl.replace(/\/$/, '');
 const API_BASE_URL = `${TRIGGER_API_URL}/api/proxy`;
-const API_TOKEN = process.env.REACT_APP_biofuelcircle_API_TOKEN || '';
-const SECRET_KEY = process.env.REACT_APP_SCN_API_SECRET_KEY || '';
+const API_TOKEN = getRequiredEnv('REACT_APP_biofuelcircle_API_TOKEN');
+const SECRET_KEY = getRequiredEnv('REACT_APP_SCN_API_SECRET_KEY');
 
 const commonHeaders = {
     'Content-Type': 'application/json',
