@@ -4,11 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "copy-env": "node -e \"const fs=require('fs'); if(fs.existsSync('.env')) fs.copyFileSync('.env', 'supplierfirst-automation-dashboard/.env');\"",
-    "build:ui": "npm run copy-env && cd supplierfirst-automation-dashboard && npm run build",
-    "start:api": "ts-node trigger-api.ts",
-    "start:all": "concurrently \"npm run start:api\" \"npm run copy-env && cd supplierfirst-automation-dashboard && npm start\"",
-    "start:unified": "npm run build:ui && npm run start:api"
+    "start": "ts-node trigger-api.ts",
+    "build:ui": "node -e \"const fs=require('fs'); if(fs.existsSync('.env')) fs.copyFileSync('.env', 'supplierfirst-automation-dashboard/.env');\" && cd supplierfirst-automation-dashboard && npm run build",
+    "dev": "npm run build:ui && npm start"
   },
   "keywords": [],
   "author": "",
@@ -25,7 +23,6 @@
   },
   "dependencies": {
     "axios": "^1.14.0",
-    "concurrently": "^9.1.2",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "readline-sync": "^1.4.10"

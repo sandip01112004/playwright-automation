@@ -129,23 +129,6 @@ export const taskApi = {
         return lookupCache[key.toLowerCase()];
     },
 
-    /**
-     * Discovery: Fetch the most recently triggered task from the Trigger API
-     */
-    getActiveTask: async (): Promise<{ taskId: string | null; status: string } | null> => {
-
-        try {
-            const response = await axios.get(`${TRIGGER_API_URL}/api/active-task`, {
-                headers: {
-                    ...commonHeaders,
-                    'x-api-key': SECRET_KEY
-                }
-            });
-            return response.data;
-        } catch (error) {
-            return null;
-        }
-    },
 
     /**
      * Fetch real-time automation logs from the Trigger API

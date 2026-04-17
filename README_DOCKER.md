@@ -20,7 +20,7 @@ To run this project using Docker, follow these steps:
     Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 4.  **Run Tests**:
-    The system waits for a trigger at `http://localhost:3001/api/trigger`.
+    The system waits for a trigger at `http://localhost:3000/api/trigger`.
     The Dashboard will automatically detect active tasks and show the UI.
     You can view the reports in the `playwright-report` folder on your host machine.
 

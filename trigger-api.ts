@@ -32,14 +32,11 @@ app.use(express.json());
 // Set up the path to the React dashboard build folder
 const BUILD_PATH = path.join(__dirname, 'supplierfirst-automation-dashboard', 'dist');
 
-// In production, serve the React dashboard static files
-if (process.env.NODE_ENV === 'production') {
-    console.log(`[System] Production mode: Serving UI from ${BUILD_PATH}`);
-    app.use(express.static(BUILD_PATH));
-}
 
 // In-memory log storage
 const taskLogs = new Map<string, string[]>();
+
+
 
 // SSE Client Management
 let sseClients: Response[] = [];
@@ -74,16 +71,6 @@ const broadcast = (event: any) => {
     sseClients.forEach(client => client.write(data));
 };
 
-/**
- * NAVIGATION SIGNAL ENDPOINT
- * Allows Playwright or other services to force the dashboard to navigate.
- */
-app.get('/api/signal-navigation/:taskId', (req, res) => {
-    const taskId = req.params.taskId;
-    console.log(`[Signal] Manual navigation signal received for Task ${taskId}`);
-    broadcast({ type: 'task_triggered', taskId });
-    res.json({ status: 'OK', message: `Navigation signal sent for Task ${taskId}` });
-});
 
 // Error handling middleware for JSON parsing
 app.use((err: any, req: Request, res: Response, next: any) => {
@@ -148,6 +135,16 @@ app.get('/api/logs/:taskId', (req: Request, res: Response) => {
     res.json({ taskId, logs });
 });
 
+/**
+ * HEALTH CHECK ENDPOINT
+ * Used by Docker/AWS to verify the server is running.
+ */
+app.get('/api/logs/healthcheck', (req, res) => {
+    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+
+
 
 
 
@@ -209,6 +206,8 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
     console.log(`[Flow] Action: ${flowAction}`);
     console.log(`************************************************\n`);
 
+
+
     // 5. Respond to BFC
     res.status(202).json({
         message: 'Task accepted.',
@@ -264,9 +263,6 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
     pwProcess.on('error', (err) => {
         appendLog(`[System] Failed to start Playwright process: ${err.message}`);
         console.error(`[Worker] Failed to start Playwright process for Task ${task_id}:`, err);
-    });
-
-    pwProcess.on('spawn', () => {
     });
 
     pwProcess.on('close', (code) => {

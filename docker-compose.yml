@@ -7,7 +7,7 @@ services:
       - .env
     environment:
       - HEADLESS=true
-      - NODE_ENV=development
+      - NODE_ENV=production
     volumes:
       - ./playwright-report:/app/playwright-report
       - ./test-results:/app/test-results

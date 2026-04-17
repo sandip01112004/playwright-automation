@@ -1,12 +1,30 @@
-
-# Playwright
+# Dependencies
 node_modules/
+supplierfirst-automation-dashboard/node_modules/
+
+# Production Build
+dist/
+supplierfirst-automation-dashboard/dist/
+supplierfirst-automation-dashboard/build/
+
+# Playwright / Testing
 /test-results/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Environment / Secret
 .env
-/data/
-/DOCS/
-/docs/
+.env.local
+.env.*.local
+*.secret
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/

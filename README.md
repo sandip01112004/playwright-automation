@@ -48,18 +48,25 @@ cp .env.example .env
 
 ---
 
-## 💻 Running the Application
+## 🚀 Running the Application
 
-To start just the trigger API:
+This project uses a **Unified Port Architecture**. The Express API serves both the backend endpoints and the React dashboard on a single port (**3000**).
+
+### Production / Unified Mode
+To run the full application (UI + API) on port 3000:
+1. **Build the UI**: `npm run build:ui`
+2. **Start the Server**: `npm start`
+
+### Development Mode
+To build and start the unified server in one command:
 ```bash
-npm run start:api
+npm run dev
 ```
 
-To start just the React dashboard:
-```bash
-cd supplierfirst-automation-dashboard
-npm start
-```
+### Manual Component Access
+If you need to run components separately (for advanced debugging):
+- API only: `npm run start:api` (on root)
+- Dashboard only: `npm start` (inside the dashboard folder)
 
 ### Running Tests
 To run the Playwright end-to-end tests:

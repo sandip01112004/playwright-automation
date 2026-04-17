@@ -32,7 +32,7 @@ const AutomationDashboard: React.FC = () => {
     React.useEffect(() => {
         const handleUrlChange = () => {
             const queryParams = new URLSearchParams(window.location.search);
-            let idValue = queryParams.get('id') || queryParams.get('taskId');
+            let idValue = queryParams.get('taskId');
 
             // Clever Fallback: If no 'id=' or 'taskId=' key is found, check if the query string is just a number (e.g. ?167)
             if (!idValue) {
@@ -62,21 +62,6 @@ const AutomationDashboard: React.FC = () => {
         return () => window.removeEventListener('popstate', handleUrlChange);
     }, []);
 
-    // Active Task Discovery (Polls when idle)
-    const fetchInitialData = React.useCallback(async () => {
-        try {
-            await taskApi.getLookupData('automation_status');
-        } catch (err) {
-            console.error('Error fetching lookup data:', err);
-        }
-    }, []);
-
-    // Fetch lookup data only when a task becomes active
-    React.useEffect(() => {
-        if (taskId) {
-            fetchInitialData();
-        }
-    }, [taskId, fetchInitialData]);
 
     // Active Task Discovery (Live Trigger via SSE)
     React.useEffect(() => {
