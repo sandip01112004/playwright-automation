@@ -167,6 +167,41 @@ export const taskApi = {
             console.warn('[taskApi] Log fetch failed. Check X-API-KEY or Trigger API status.');
             return [];
         }
+    },
+
+    /**
+     * Subscribe to real-time events from the server (SSE)
+     * This replaces the need for the discovery interval.
+     */
+    subscribeToEvents: (onTaskTriggered: (taskId: string) => void) => {
+        const url = `${TRIGGER_API_URL}/api/events`;
+        console.log(`[taskApi] Connecting to SSE at ${url}...`);
+
+        const eventSource = new EventSource(url);
+
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'task_triggered' && data.taskId) {
+                    console.log(`[taskApi] SSE Received Trigger: Task ${data.taskId}`);
+                    onTaskTriggered(data.taskId);
+                }
+            } catch (err) {
+                console.error('[taskApi] Error parsing SSE message:', err);
+            }
+        };
+
+        eventSource.onerror = (err) => {
+            console.error('[taskApi] SSE Connection lost. Retrying in 5s...');
+            eventSource.close();
+            // Standard EventSource auto-reconnect follows its own timing, 
+            // but we provide a manual fallback if needed.
+        };
+
+        return () => {
+            console.log('[taskApi] Closing SSE Connection.');
+            eventSource.close();
+        };
     }
 };
 

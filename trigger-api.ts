@@ -30,7 +30,7 @@ app.use(cors());
 app.use(express.json());
 
 // Set up the path to the React dashboard build folder
-const BUILD_PATH = path.join(__dirname, 'supplierfirst-automation-dashboard', 'build');
+const BUILD_PATH = path.join(__dirname, 'supplierfirst-automation-dashboard', 'dist');
 
 // In production, serve the React dashboard static files
 if (process.env.NODE_ENV === 'production') {
@@ -43,6 +43,50 @@ const taskLogs = new Map<string, string[]>();
 
 // Tracking for "Active Task Discovery"
 let lastActiveTask: { taskId: string; status: 'STARTING' | 'ACTIVE' | 'FINISHED' | 'FAILED' } | null = null;
+
+// SSE Client Management
+let sseClients: Response[] = [];
+
+/**
+ * SSE ENDPOINT
+ * Dashboard connects here to receive real-time updates without polling.
+ */
+app.get('/api/events', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    // Send initial ping to confirm connection
+    res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+
+    sseClients.push(res);
+    console.log(`[SSE] Dashboard connected. Active clients: ${sseClients.length}`);
+
+    req.on('close', () => {
+        sseClients = sseClients.filter(client => client !== res);
+        console.log(`[SSE] Dashboard disconnected. Active clients: ${sseClients.length}`);
+    });
+});
+
+/**
+ * Broadcast helper
+ */
+const broadcast = (event: any) => {
+    const data = `data: ${JSON.stringify(event)}\n\n`;
+    sseClients.forEach(client => client.write(data));
+};
+
+/**
+ * NAVIGATION SIGNAL ENDPOINT
+ * Allows Playwright or other services to force the dashboard to navigate.
+ */
+app.get('/api/signal-navigation/:taskId', (req, res) => {
+    const taskId = req.params.taskId;
+    console.log(`[Signal] Manual navigation signal received for Task ${taskId}`);
+    broadcast({ type: 'task_triggered', taskId });
+    res.json({ status: 'OK', message: `Navigation signal sent for Task ${taskId}` });
+});
 
 // Error handling middleware for JSON parsing
 app.use((err: any, req: Request, res: Response, next: any) => {
@@ -207,6 +251,10 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
         action: flowAction
     });
 
+    // 6. Notify Dashboard via SSE (Instant Navigation)
+    console.log(`[SSE] Broadcasting trigger for Task ${taskIdStr}...`);
+    broadcast({ type: 'task_triggered', taskId: taskIdStr });
+
     // --- NEW: Neutralize Task Status immediately ---
     // This prevents the Dashboard from seeing the "failed" status from a previous run
     try {
@@ -292,16 +340,22 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
 });
 
 /**
- * PRODUCTION FALLBACK
- * For any non-API request, serve the React index.html to support client-side routing.
+ * UI HOSTING (Consolidated Port)
+ * Serve the React dashboard from the dist folder.
  */
-if (process.env.NODE_ENV === 'production') {
-    app.get('*', (req, res) => {
-        if (!req.path.startsWith('/api')) {
-            res.sendFile(path.join(BUILD_PATH, 'index.html'));
-        }
-    });
-}
+// Server static files first
+app.use(express.static(BUILD_PATH));
+
+// SPA Support: Catch-all route to serve index.html for any non-API routes
+app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+        res.sendFile(path.join(BUILD_PATH, 'index.html'), (err) => {
+            if (err) {
+                res.status(404).send("Dashboard build (dist) not found. Please ensure the project is built.");
+            }
+        });
+    }
+});
 
 const PORT = config.TRIGGER_API_PORT;
 app.listen(PORT, () => {

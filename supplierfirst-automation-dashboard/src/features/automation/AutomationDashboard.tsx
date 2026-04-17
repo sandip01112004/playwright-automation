@@ -11,7 +11,8 @@ const AutomationDashboard: React.FC = () => {
     // 1. Task State Tracking
     const [taskId, setTaskId] = React.useState<number | null>(() => {
         const queryParams = new URLSearchParams(window.location.search);
-        const id = queryParams.get('taskId');
+        // Support both 'id' (requested) and 'taskId' (legacy)
+        const id = queryParams.get('id') || queryParams.get('taskId');
         return id ? parseInt(id, 10) : null;
     });
 
@@ -34,12 +35,25 @@ const AutomationDashboard: React.FC = () => {
             const idValue = queryParams.get('taskId');
 
             if (!idValue) {
-                setUrlError(null);
-                setTaskId(null);
+                // Also check 'taskId'
+                const legacyId = queryParams.get('taskId');
+                if (!legacyId) {
+                    setUrlError(null);
+                    setTaskId(null);
+                    return;
+                }
+                const parsedLegacyId = parseInt(legacyId, 10);
+                if (isNaN(parsedLegacyId)) {
+                    setUrlError('Invalid Task ID: The taskId provided is not a valid number.');
+                    setTaskId(null);
+                } else {
+                    setUrlError(null);
+                    setTaskId(parsedLegacyId);
+                }
             } else {
                 const parsedId = parseInt(idValue, 10);
                 if (isNaN(parsedId)) {
-                    setUrlError('Invalid Task ID: The taskId provided is not a valid number.');
+                    setUrlError('Invalid Task ID: The id provided is not a valid number.');
                     setTaskId(null);
                 } else {
                     setUrlError(null);
@@ -69,47 +83,32 @@ const AutomationDashboard: React.FC = () => {
         }
     }, [taskId, fetchInitialData]);
 
-    // Active Task Discovery (Polls continuously to detect restarts or new tasks)
+    // Active Task Discovery (Live Trigger via SSE)
     React.useEffect(() => {
-        const discoveryInterval = setInterval(async () => {
-            const active = await taskApi.getActiveTask();
-            if (!active || !active.taskId) return;
+        console.log('[Dashboard] Initializing real-time SSE listener...');
 
-            // Optimization: Wake up if task is STARTING
-            // We focus on STARTING because trigger-api sets it to STARTING only at the beginning of a flow
-            const isStarting = active.status === 'STARTING';
-            const isNewTask = !taskId || active.taskId.toString() !== taskId.toString();
+        const unsubscribe = taskApi.subscribeToEvents((newTaskId: string) => {
+            const parsedId = parseInt(newTaskId, 10);
 
-            if (isStarting || isNewTask) {
-                // Only "wake up" if we haven't already handled this specific STARTING event for this task
-                // We use a combination of taskId and a 'recomputing' flag if needed, 
-                // but for now, just setting the taskId will trigger a refresh in useTaskPolling if taskId changes.
-                // If taskId is the same, we need to manually force a refresh or rely on useTaskPolling.
+            // Only navigate if it's a new task or we are currently idle
+            if (!taskId || parsedId !== taskId) {
+                console.log(`[SSE] New Task Triggered: ${newTaskId}. Navigating...`);
 
-                if (isNewTask || !handledTaskIds.current.has(`${active.taskId}_${active.status}`)) {
-                    console.log(`[Discovery] ${isNewTask ? 'New' : 'Restarted'} task detected: ${active.taskId} (Status: ${active.status}). Waking up...`);
+                // Update URL to match requested format: /taskid?id=[taskId]
+                const newUrl = `/taskid?id=${newTaskId}`;
+                window.history.pushState({ taskId: parsedId }, '', newUrl);
 
-                    // Mark as handled for this specific status
-                    handledTaskIds.current.add(`${active.taskId}_${active.status}`);
-
-                    const newUrl = `${window.location.pathname}?taskId=${active.taskId}`;
-                    window.history.pushState({}, '', newUrl);
-
-                    // If taskId is the same, we need to force useTaskPolling to restart.
-                    // The easiest way is to briefly set taskId to null then back, 
-                    // or better: let useTaskPolling handle status transitions from terminal to active.
-
-                    if (!isNewTask) {
-                        // Force a reload if it's a restart of the same task to ensure all hooks reset
-                        window.location.reload();
-                    } else {
-                        setTaskId(parseInt(active.taskId, 10));
-                    }
-                }
+                // Update state to trigger useTaskPolling
+                setTaskId(parsedId);
+            } else {
+                console.log(`[SSE] Already tracking Task ${newTaskId}. Skipping navigation.`);
             }
-        }, Number(process.env.REACT_APP_DISCOVERY_INTERVAL || 5000));
+        });
 
-        return () => clearInterval(discoveryInterval);
+        return () => {
+            console.log('[Dashboard] Cleaning up SSE listener.');
+            unsubscribe();
+        };
     }, [taskId]);
 
     const handleReset = React.useCallback(async () => {

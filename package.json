@@ -8,7 +8,8 @@
     "copy-env": "node -e \"const fs=require('fs'); if(fs.existsSync('.env')) fs.copyFileSync('.env', 'supplierfirst-automation-dashboard/.env');\"",
     "build:ui": "npm run copy-env && cd supplierfirst-automation-dashboard && npm run build",
     "start:prod": "node -e \"process.env.NODE_ENV='production'; require('ts-node/register'); require('./trigger-api.ts');\"",
-    "start:all": "concurrently \"npm run start:api\" \"npm run copy-env && cd supplierfirst-automation-dashboard && npm start\""
+    "start:all": "concurrently \"npm run start:api\" \"npm run copy-env && cd supplierfirst-automation-dashboard && npm start\"",
+    "start:unified": "npm run build:ui && npm run start:api"
   },
   "keywords": [],
   "author": "",
