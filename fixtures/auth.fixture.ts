@@ -72,14 +72,6 @@ export const test = base.extend<{ page: Page, payload: AutomationPayload }>({
         }
         const automationService = new AutomationService(taskId);
 
-        // 1. Initialize Task Status
-        await test.step('Initialize Task Status', async () => {
-            console.log(`[Auth] Initializing Task ${taskId} status to 'processing'...`);
-            await automationService.updateTaskStatus('processing').catch(err => {
-                console.error(`[Auth] Failed to reset task status: ${err.message}`);
-            });
-        });
-
         // 2. Initial Authentication Setup
         await injectTokensAndReload(page, baseUrl);
 

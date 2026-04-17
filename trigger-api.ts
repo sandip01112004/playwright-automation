@@ -29,11 +29,61 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Set up the path to the React dashboard build folder
+const BUILD_PATH = path.join(__dirname, 'supplierfirst-automation-dashboard', 'dist');
+
+// In production, serve the React dashboard static files
+if (process.env.NODE_ENV === 'production') {
+    console.log(`[System] Production mode: Serving UI from ${BUILD_PATH}`);
+    app.use(express.static(BUILD_PATH));
+}
+
 // In-memory log storage
 const taskLogs = new Map<string, string[]>();
 
-// Tracking for "Active Task Discovery"
-let lastActiveTask: { taskId: string; status: 'STARTING' | 'ACTIVE' | 'FINISHED' | 'FAILED' } | null = null;
+// SSE Client Management
+let sseClients: Response[] = [];
+
+/**
+ * SSE ENDPOINT
+ * Dashboard connects here to receive real-time updates without polling.
+ */
+app.get('/api/events', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    // Send initial ping to confirm connection
+    res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+
+    sseClients.push(res);
+    console.log(`[SSE] Dashboard connected. Active clients: ${sseClients.length}`);
+
+    req.on('close', () => {
+        sseClients = sseClients.filter(client => client !== res);
+        console.log(`[SSE] Dashboard disconnected. Active clients: ${sseClients.length}`);
+    });
+});
+
+/**
+ * Broadcast helper
+ */
+const broadcast = (event: any) => {
+    const data = `data: ${JSON.stringify(event)}\n\n`;
+    sseClients.forEach(client => client.write(data));
+};
+
+/**
+ * NAVIGATION SIGNAL ENDPOINT
+ * Allows Playwright or other services to force the dashboard to navigate.
+ */
+app.get('/api/signal-navigation/:taskId', (req, res) => {
+    const taskId = req.params.taskId;
+    console.log(`[Signal] Manual navigation signal received for Task ${taskId}`);
+    broadcast({ type: 'task_triggered', taskId });
+    res.json({ status: 'OK', message: `Navigation signal sent for Task ${taskId}` });
+});
 
 // Error handling middleware for JSON parsing
 app.use((err: any, req: Request, res: Response, next: any) => {
@@ -97,6 +147,7 @@ app.get('/api/logs/:taskId', (req: Request, res: Response) => {
     const logs = taskLogs.get(taskId) || [];
     res.json({ taskId, logs });
 });
+
 
 /**
  * ACTIVE TASK ENDPOINT (Discovery)
@@ -162,7 +213,7 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
     // 3. Automation Token Logic
     console.log(`[API] Checking automation token for Task ${taskIdStr}...`);
     const targetSystem = await AutomationService.fetchTargetSystemId();
-    const username = process.env.SUPPLIER_NAME || 'unknown';
+    const username = config.SUPPLIER_NAME;
 
     const tokenStatus = await AutomationService.checkTokenStatus(username, targetSystem.toString());
     let flowAction = 'CONTINUE';
@@ -187,9 +238,6 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
     console.log(`[Flow] Action: ${flowAction}`);
     console.log(`************************************************\n`);
 
-    // 4. Update Global Discovery State
-    lastActiveTask = { taskId: taskIdStr, status: 'STARTING' };
-
     // 5. Respond to BFC
     res.status(202).json({
         message: 'Task accepted.',
@@ -198,15 +246,10 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
         action: flowAction
     });
 
-    // --- NEW: Neutralize Task Status immediately ---
-    // This prevents the Dashboard from seeing the "failed" status from a previous run
-    try {
-        const automationService = new AutomationService(task_id);
-        await automationService.updateTaskStatus('processing');
-    } catch (err: any) {
-        console.warn(`[API] Failed to pre-neutralize Task ${task_id} status: ${err.message}`);
-    }
-    // ----------------------------------------------
+    // 6. Notify Dashboard via SSE (Instant Navigation)
+    console.log(`[SSE] Broadcasting trigger for Task ${taskIdStr}...`);
+    broadcast({ type: 'task_triggered', taskId: taskIdStr });
+
 
     // 6. Launch Playwright Worker
     const payloadString = JSON.stringify(payload);
@@ -221,9 +264,8 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
             ...process.env,
             TASK_ID: taskIdStr,
             TASK_PAYLOAD: encodedPayload,
-            BFC_API_TOKEN: process.env.REACT_APP_biofuelcircle_API_TOKEN || '',
-            // Also pass the new name explicitly to the worker environment if needed
-            REACT_APP_biofuelcircle_API_TOKEN: process.env.REACT_APP_biofuelcircle_API_TOKEN || '',
+            BFC_API_TOKEN: config.BFC_API_TOKEN,
+            REACT_APP_biofuelcircle_API_TOKEN: config.BFC_API_TOKEN,
             FLOW_ACTION: flowAction,
             DOTENV_CONFIG_QUIET: 'true',
             FORCE_COLOR: '1'
@@ -251,44 +293,43 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
     pwProcess.on('error', (err) => {
         appendLog(`[System] Failed to start Playwright process: ${err.message}`);
         console.error(`[Worker] Failed to start Playwright process for Task ${task_id}:`, err);
-        if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
-            lastActiveTask.status = 'FAILED';
-        }
     });
 
     pwProcess.on('spawn', () => {
-        if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
-            lastActiveTask.status = 'ACTIVE';
-        }
     });
 
     pwProcess.on('close', (code) => {
         const status = code === 0 ? 'FINISHED' : 'FAILED';
         appendLog(`[System] Playwright process finished with code ${code} (${status})`);
         console.log(`[Worker] Playwright process for Task ${task_id} finished with code ${code}`);
-
-        // Update discovery state to finished or failed
-        if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
-            lastActiveTask.status = status;
-
-            // Keep discovery status for 15 seconds so the UI definitely sees it
-            // Only clear if the task ID hasn't changed (prevents race conditions)
-            setTimeout(() => {
-                if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
-                    console.log(`[API] Clearing Discovery memory for Task ${taskIdStr} (Grace period expired)`);
-                    lastActiveTask = null;
-                }
-            }, 30000);
-        }
     });
 });
 
-const PORT = config.TRIGGER_API_PORT;
+/**
+ * UI HOSTING (Consolidated Port)
+ * Serve the React dashboard from the dist folder.
+ */
+// Server static files first
+app.use(express.static(BUILD_PATH));
+
+// SPA Support: Catch-all route to serve index.html for any non-API routes
+app.use((req, res, next) => {
+    if (!req.path.startsWith('/api')) {
+        res.sendFile(path.join(BUILD_PATH, 'index.html'), (err) => {
+            if (err) {
+                res.status(404).send("Dashboard build (dist) not found. Please ensure the project is built.");
+            }
+        });
+    } else {
+        next();
+    }
+});
+
+const PORT = config.PORT;
 app.listen(PORT, () => {
     console.log(`\n================================================`);
     console.log(`Automation Trigger API Running`);
     console.log(`Endpoint: http://localhost:${PORT}/api/trigger`);
-    console.log(`Discovery: http://localhost:${PORT}/api/active-task`);
     console.log(`================================================\n`);
 }).on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {
