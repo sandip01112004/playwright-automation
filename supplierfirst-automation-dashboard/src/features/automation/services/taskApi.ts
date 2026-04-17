@@ -1,12 +1,22 @@
 import axios from 'axios';
 import { TaskData, LookupData } from '../types/automation.types';
 
+// Utility to enforce environment variables in the frontend
+const getRequiredEnv = (key: string, defaultValue: string = ''): string => {
+    const value = process.env[key];
+    if (!value) {
+        console.warn(`[Config Warning] Missing environment variable: ${key}. Using default: "${defaultValue}"`);
+        return defaultValue;
+    }
+    return value;
+};
+
 // In Create React App, variables MUST start with REACT_APP_ to be visible in the browser
-const rawUrl = process.env.REACT_APP_TRIGGER_API_URL || '';
-const TRIGGER_API_URL = rawUrl.replace(/\/$/, '');
+// Default to the current origin if the API URL is missing (Standard for unified hosting)
+const TRIGGER_API_URL = getRequiredEnv('REACT_APP_TRIGGER_API_URL', window.location.origin).replace(/\/$/, '');
 const API_BASE_URL = `${TRIGGER_API_URL}/api/proxy`;
-const API_TOKEN = process.env.REACT_APP_biofuelcircle_API_TOKEN || '';
-const SECRET_KEY = process.env.REACT_APP_SCN_API_SECRET_KEY || '';
+const API_TOKEN = getRequiredEnv('REACT_APP_biofuelcircle_API_TOKEN', 'missing-token');
+const SECRET_KEY = getRequiredEnv('REACT_APP_SCN_API_SECRET_KEY', 'missing-secret');
 
 const commonHeaders = {
     'Content-Type': 'application/json',
@@ -155,6 +165,41 @@ export const taskApi = {
             console.warn('[taskApi] Log fetch failed. Check X-API-KEY or Trigger API status.');
             return [];
         }
+    },
+
+    /**
+     * Subscribe to real-time events from the server (SSE)
+     * This replaces the need for the discovery interval.
+     */
+    subscribeToEvents: (onTaskTriggered: (taskId: string) => void) => {
+        const url = `${TRIGGER_API_URL}/api/events`;
+        console.log(`[taskApi] Connecting to SSE at ${url}...`);
+
+        const eventSource = new EventSource(url);
+
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'task_triggered' && data.taskId) {
+                    console.log(`[taskApi] SSE Received Trigger: Task ${data.taskId}`);
+                    onTaskTriggered(data.taskId);
+                }
+            } catch (err) {
+                console.error('[taskApi] Error parsing SSE message:', err);
+            }
+        };
+
+        eventSource.onerror = (err) => {
+            console.error('[taskApi] SSE Connection lost. Retrying in 5s...');
+            eventSource.close();
+            // Standard EventSource auto-reconnect follows its own timing, 
+            // but we provide a manual fallback if needed.
+        };
+
+        return () => {
+            console.log('[taskApi] Closing SSE Connection.');
+            eventSource.close();
+        };
     }
 };
 

@@ -2,8 +2,7 @@ services:
   automation:
     build: .
     ports:
-      - "3000:3000" # Dashboard
-      - "3001:3001" # Trigger API
+      - "3000:3000" # Unified Port
     env_file:
       - .env
     environment:

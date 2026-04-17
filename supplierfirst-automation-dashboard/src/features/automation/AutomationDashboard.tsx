@@ -11,7 +11,8 @@ const AutomationDashboard: React.FC = () => {
     // 1. Task State Tracking
     const [taskId, setTaskId] = React.useState<number | null>(() => {
         const queryParams = new URLSearchParams(window.location.search);
-        const id = queryParams.get('taskId');
+        // Support both 'id' (requested) and 'taskId' (legacy)
+        const id = queryParams.get('id') || queryParams.get('taskId');
         return id ? parseInt(id, 10) : null;
     });
 
@@ -31,7 +32,15 @@ const AutomationDashboard: React.FC = () => {
     React.useEffect(() => {
         const handleUrlChange = () => {
             const queryParams = new URLSearchParams(window.location.search);
-            const idValue = queryParams.get('taskId');
+            let idValue = queryParams.get('id') || queryParams.get('taskId');
+
+            // Clever Fallback: If no 'id=' or 'taskId=' key is found, check if the query string is just a number (e.g. ?167)
+            if (!idValue) {
+                const rawQuery = window.location.search.substring(1);
+                if (/^\d+$/.test(rawQuery)) {
+                    idValue = rawQuery;
+                }
+            }
 
             if (!idValue) {
                 setUrlError(null);
@@ -39,7 +48,7 @@ const AutomationDashboard: React.FC = () => {
             } else {
                 const parsedId = parseInt(idValue, 10);
                 if (isNaN(parsedId)) {
-                    setUrlError('Invalid Task ID: The taskId provided is not a valid number.');
+                    setUrlError(`Invalid Task ID: The ID provided ("${idValue}") is not a valid number.`);
                     setTaskId(null);
                 } else {
                     setUrlError(null);
@@ -69,90 +78,44 @@ const AutomationDashboard: React.FC = () => {
         }
     }, [taskId, fetchInitialData]);
 
-    // Active Task Discovery (Polls continuously to detect restarts or new tasks)
+    // Active Task Discovery (Live Trigger via SSE)
     React.useEffect(() => {
-        const discoveryInterval = setInterval(async () => {
-            const active = await taskApi.getActiveTask();
-            if (!active || !active.taskId) return;
+        console.log('[Dashboard] Initializing real-time SSE listener...');
 
-            // Optimization: Wake up if task is STARTING
-            // We focus on STARTING because trigger-api sets it to STARTING only at the beginning of a flow
-            const isStarting = active.status === 'STARTING';
-            const isNewTask = !taskId || active.taskId.toString() !== taskId.toString();
+        const unsubscribe = taskApi.subscribeToEvents((newTaskId: string) => {
+            const parsedId = parseInt(newTaskId, 10);
 
-            if (isStarting || isNewTask) {
-                // Only "wake up" if we haven't already handled this specific STARTING event for this task
-                // We use a combination of taskId and a 'recomputing' flag if needed, 
-                // but for now, just setting the taskId will trigger a refresh in useTaskPolling if taskId changes.
-                // If taskId is the same, we need to manually force a refresh or rely on useTaskPolling.
+            // Only navigate if it's a new task or we are currently idle
+            if (!taskId || parsedId !== taskId) {
+                console.log(`[SSE] New Task Triggered: ${newTaskId}. Navigating...`);
 
-                if (isNewTask || !handledTaskIds.current.has(`${active.taskId}_${active.status}`)) {
-                    console.log(`[Discovery] ${isNewTask ? 'New' : 'Restarted'} task detected: ${active.taskId} (Status: ${active.status}). Waking up...`);
+                // Update URL to match requested format: /taskid?id=[taskId]
+                const newUrl = `/taskid?id=${newTaskId}`;
+                window.history.pushState({ taskId: parsedId }, '', newUrl);
 
-                    // Mark as handled for this specific status
-                    handledTaskIds.current.add(`${active.taskId}_${active.status}`);
-
-                    const newUrl = `${window.location.pathname}?taskId=${active.taskId}`;
-                    window.history.pushState({}, '', newUrl);
-
-                    // If taskId is the same, we need to force useTaskPolling to restart.
-                    // The easiest way is to briefly set taskId to null then back, 
-                    // or better: let useTaskPolling handle status transitions from terminal to active.
-
-                    if (!isNewTask) {
-                        // Force a reload if it's a restart of the same task to ensure all hooks reset
-                        window.location.reload();
-                    } else {
-                        setTaskId(parseInt(active.taskId, 10));
-                    }
-                }
+                // Update state to trigger useTaskPolling
+                setTaskId(parsedId);
+            } else {
+                console.log(`[SSE] Already tracking Task ${newTaskId}. Skipping navigation.`);
             }
-        }, Number(process.env.REACT_APP_DISCOVERY_INTERVAL || 5000));
+        });
 
-        return () => clearInterval(discoveryInterval);
+        return () => {
+            console.log('[Dashboard] Cleaning up SSE listener.');
+            unsubscribe();
+        };
     }, [taskId]);
 
-    const handleReset = React.useCallback(async () => {
+    const handleReset = React.useCallback(() => {
         // Clear the URL query params
         window.history.replaceState({}, document.title, window.location.pathname);
         setTaskId(null);
-
-        // Signal the Trigger API to reset its memory
-        try {
-            const TRIGGER_API_URL = process.env.REACT_APP_TRIGGER_API_URL || '';
-            const SECRET_KEY = process.env.REACT_APP_SCN_API_SECRET_KEY || '';
-            await fetch(`${TRIGGER_API_URL}/api/reset`, {
-                method: 'POST',
-                headers: { 'x-api-key': SECRET_KEY }
-            });
-        } catch (err) {
-            console.warn('[Dashboard] API Reset failed:', err);
-        }
 
         // Refresh the page to restore clean idle state
         window.location.reload();
     }, []);
 
-    const { task, lookupData, logs, loading, error, isReconnecting } = useTaskPolling(taskId);
-
-    // Auto-reset to Idle when task is finished
-    React.useEffect(() => {
-        if (!taskId || !task || !lookupData.length) return;
-
-        const statusId = Number(task.status);
-        const isFinished = lookupData.some(l =>
-            String(l.value || l.name).toLowerCase() === 'completed' && l.id === statusId
-        );
-
-        if (isFinished) {
-            console.log(`[Dashboard] Task ${taskId} completed. Returning to Idle in 3 seconds...`);
-            const timer = setTimeout(() => {
-                window.history.pushState({}, '', window.location.pathname);
-                setTaskId(null);
-            }, 30000);
-            return () => clearTimeout(timer);
-        }
-    }, [task, taskId, lookupData]);
+    const { task, lookupData, logs, loading, error, isReconnecting, isPolling } = useTaskPolling(taskId);
 
     const scrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -189,14 +152,6 @@ const AutomationDashboard: React.FC = () => {
                         </code>
                     </div>
 
-                    <div style={{ marginTop: '20px' }}>
-                        <button
-                            onClick={handleReset}
-                            style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '0.75rem', textDecoration: 'underline' }}
-                        >
-                            Reset Discovery State
-                        </button>
-                    </div>
                 </div>
             </div>
         );
@@ -213,7 +168,10 @@ const AutomationDashboard: React.FC = () => {
     if (loading && !task) {
         return (
             <div className="automation-feature">
-                <LoadingScreen message="Initializing system connection..." />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '1rem', color: 'rgba(255,255,255,0.6)' }}>
+                    <div className="loader" style={{ width: '30px', height: '30px' }}></div>
+                    <span style={{ fontSize: '0.8rem', letterSpacing: '0.5px' }}>Loading...</span>
+                </div>
             </div>
         );
     }
@@ -250,9 +208,14 @@ const AutomationDashboard: React.FC = () => {
     }
 
     const renderContent = () => {
-        // Essential guard: if task data or lookup mappings aren't ready, keep loading
-        if (!task || lookupData.length === 0) {
-            return <LoadingScreen message="Syncing with automation server..." />;
+        // Essential guard: if task data or lookup mappings aren't ready, show a simple loading state
+        if (!task || lookupData.length === 0 || loading) {
+            return (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '1rem', color: 'rgba(255,255,255,0.6)' }}>
+                    <div className="loader" style={{ width: '40px', height: '40px' }}></div>
+                    <span style={{ fontSize: '0.9rem', letterSpacing: '0.5px' }}>Loading...</span>
+                </div>
+            );
         }
 
         const statusId = Number(task.status);
@@ -272,7 +235,6 @@ const AutomationDashboard: React.FC = () => {
             return (
                 <div className="otp-auto-fetch-container">
                     <OtpInputScreen
-
                         defaultOtp={task?.otp || ''}
                     />
                     <div className="auto-fetch-status">
@@ -321,8 +283,22 @@ const AutomationDashboard: React.FC = () => {
 
             {/* Footer Status Bar - Show for any valid task ID */}
             {taskId !== null && (
-                <div style={{ marginTop: '30px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '1px' }}>
-                    Task ID: #{taskId} • Polling Active
+                <div style={{
+                    marginTop: '40px',
+                    fontSize: '0.7rem',
+                    color: 'rgba(255,255,255,0.2)',
+                    letterSpacing: '1px',
+                    textTransform: 'uppercase',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px'
+                }}>
+                    <span style={{ opacity: 0.5 }}>Task #{taskId}</span>
+                    <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'currentColor', opacity: 0.3 }}></span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: isPolling ? '#10b981' : '#64748b' }}></div>
+                        {isPolling ? 'Live Sync Active' : 'Polling Suspended'}
+                    </span>
                 </div>
             )}
         </div>

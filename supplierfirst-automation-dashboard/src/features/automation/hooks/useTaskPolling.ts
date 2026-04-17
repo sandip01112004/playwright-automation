@@ -9,6 +9,7 @@ export const useTaskPolling = (taskId: number | null) => {
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
+    const [isPolling, setIsPolling] = useState<boolean>(false);
 
     const taskRef = useRef<TaskData | null>(null);
     useEffect(() => {
@@ -69,6 +70,7 @@ export const useTaskPolling = (taskId: number | null) => {
         setLogs([]);
         setLoading(true);
         setError(null);
+        setIsPolling(true);
     }, [taskId]);
 
     useEffect(() => {
@@ -91,6 +93,7 @@ export const useTaskPolling = (taskId: number | null) => {
             const currentTask = taskRef.current;
             if (currentTask && isTerminalStatus(currentTask.status)) {
                 console.log(`[useTaskPolling] Task ${taskId} is terminal. Stopping interval.`);
+                setIsPolling(false);
                 clearInterval(interval);
                 return;
             }
@@ -108,6 +111,7 @@ export const useTaskPolling = (taskId: number | null) => {
                 setIsReconnecting(false);
 
                 if (isTerminalStatus(data.status)) {
+                    setIsPolling(false);
                     clearInterval(interval);
                 }
 
@@ -143,10 +147,10 @@ export const useTaskPolling = (taskId: number | null) => {
                     );
 
                     if (!isTaskFailed) {
-                        console.error(`[useTaskPolling] Reached failure limit (${MAX_FAILURES}). Stopping polling.`);
-                        setError('Connection to automation server lost. Please check your network and refresh.');
-                        setIsReconnecting(false);
+                        setIsPolling(false);
+                        clearInterval(interval);
                     }
+                    setIsPolling(false);
                     clearInterval(interval);
                 }
             }
@@ -154,9 +158,10 @@ export const useTaskPolling = (taskId: number | null) => {
 
         return () => {
             console.log(`[useTaskPolling] Cleaning up polling for Task ${taskId}`);
+            setIsPolling(false);
             clearInterval(interval);
         };
     }, [taskId, fetchTaskStatus, isTerminalStatus, lookupData]);
 
-    return { task, lookupData, logs, loading, error, isReconnecting };
+    return { task, lookupData, logs, loading, error, isReconnecting, isPolling };
 };
