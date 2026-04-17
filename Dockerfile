@@ -12,7 +12,7 @@ ENV REACT_APP_TRIGGER_API_URL=$REACT_APP_TRIGGER_API_URL
 ENV REACT_APP_biofuelcircle_API_BASE_URL=$REACT_APP_biofuelcircle_API_BASE_URL
 
 COPY supplierfirst-automation-dashboard/package*.json ./
-RUN npm ci
+RUN npm install
 
 COPY supplierfirst-automation-dashboard/ ./
 RUN npm run build
@@ -24,7 +24,7 @@ WORKDIR /app
 
 # Install root dependencies (API + Playwright)
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 # Install serve to host the static React build
 RUN npm install -g serve
@@ -40,9 +40,9 @@ COPY pages/ ./pages/
 COPY tests/ ./tests/
 
 # Copy built React dashboard from Stage 1
-COPY --from=dashboard-builder /app/dashboard/build ./dashboard-build
+COPY --from=dashboard-builder /app/dashboard/dist ./dashboard-build
 
-EXPOSE 3000 3001
+EXPOSE 3000
 
 ENV HEADLESS=true
 ENV PORT=3001
