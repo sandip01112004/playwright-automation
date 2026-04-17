@@ -4,7 +4,6 @@ FROM node:20-slim AS dashboard-builder
 WORKDIR /app/dashboard
 
 # Accept BFC API URLs as build args so they're baked into the React bundle correctly
-# Values must be provided via .env and docker-compose build.args — no defaults here
 ARG REACT_APP_TRIGGER_API_URL
 ARG REACT_APP_biofuelcircle_API_BASE_URL
 
@@ -26,31 +25,23 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Install serve to host the static React build
-RUN npm install -g serve
-
 # Copy application source files
-COPY tsconfig.json ./
-COPY playwright.config.ts ./
-COPY trigger-api.ts ./
-COPY types/ ./types/
-COPY utils/ ./utils/
-COPY fixtures/ ./fixtures/
-COPY pages/ ./pages/
-COPY tests/ ./tests/
+COPY . .
 
-# Copy built React dashboard from Stage 1
-COPY --from=dashboard-builder /app/dashboard/dist ./dashboard-build
+# Copy built React dashboard from Stage 1 into the location Express expects
+RUN mkdir -p supplierfirst-automation-dashboard
+COPY --from=dashboard-builder /app/dashboard/dist ./supplierfirst-automation-dashboard/dist
+
+# Environment Settings
+ENV NODE_ENV=production
+ENV HEADLESS=true
+ENV PORT=3000
 
 EXPOSE 3000
 
-ENV HEADLESS=true
-ENV PORT=3001
-
-# Health check against the logs endpoint — returns 200 for any taskId, even unknown ones
+# Health check against the logs endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s \
-  CMD curl -sf http://localhost:3001/api/logs/healthcheck > /dev/null || exit 1
+  CMD curl -sf http://localhost:3000/api/logs/healthcheck > /dev/null || exit 1
 
-CMD ["npx", "concurrently", \
-     "npx ts-node trigger-api.ts", \
-     "serve -s dashboard-build -l 3000 --no-clipboard"]
+# Start the integrated server
+CMD ["npx", "ts-node", "trigger-api.ts"]

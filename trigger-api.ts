@@ -41,6 +41,9 @@ if (process.env.NODE_ENV === 'production') {
 // In-memory log storage
 const taskLogs = new Map<string, string[]>();
 
+// Tracking for "Active Task Discovery"
+let lastActiveTask: { taskId: string; status: 'STARTING' | 'ACTIVE' | 'FINISHED' | 'FAILED' } | null = null;
+
 // SSE Client Management
 let sseClients: Response[] = [];
 
@@ -238,6 +241,9 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
     console.log(`[Flow] Action: ${flowAction}`);
     console.log(`************************************************\n`);
 
+    // 4. Update Global Discovery State
+    lastActiveTask = { taskId: taskIdStr, status: 'STARTING' };
+
     // 5. Respond to BFC
     res.status(202).json({
         message: 'Task accepted.',
@@ -296,12 +302,28 @@ app.post('/api/trigger', async (req: Request, res: Response) => {
     });
 
     pwProcess.on('spawn', () => {
+        if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
+            lastActiveTask.status = 'ACTIVE';
+        }
     });
 
     pwProcess.on('close', (code) => {
         const status = code === 0 ? 'FINISHED' : 'FAILED';
         appendLog(`[System] Playwright process finished with code ${code} (${status})`);
         console.log(`[Worker] Playwright process for Task ${task_id} finished with code ${code}`);
+
+        // Update discovery state to finished or failed
+        if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
+            lastActiveTask.status = status;
+
+            // Keep discovery status for 30 seconds so the UI definitely sees it
+            setTimeout(() => {
+                if (lastActiveTask && lastActiveTask.taskId === taskIdStr) {
+                    console.log(`[API] Clearing Discovery memory for Task ${taskIdStr} (Grace period expired)`);
+                    lastActiveTask = null;
+                }
+            }, 30000);
+        }
     });
 });
 
