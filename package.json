@@ -5,13 +5,15 @@
   "main": "index.js",
   "scripts": {
     "start:api": "ts-node trigger-api.ts",
-    "start:all": "concurrently \"npm run start:api\" \"cd supplierfirst-automation-dashboard && PORT=3000 npm start\""
+    "copy-env": "node -e \"const fs=require('fs'); if(fs.existsSync('.env')) fs.copyFileSync('.env', 'supplierfirst-automation-dashboard/.env');\"",
+    "start:all": "concurrently \"npm run start:api\" \"npm run copy-env && cd supplierfirst-automation-dashboard && npm start\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
     "@types/readline-sync": "^1.4.8",
@@ -22,6 +24,7 @@
   "dependencies": {
     "axios": "^1.14.0",
     "concurrently": "^9.1.2",
+    "cors": "^2.8.6",
     "express": "^5.2.1",
     "readline-sync": "^1.4.10"
   }

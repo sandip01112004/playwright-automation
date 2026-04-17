@@ -2,8 +2,8 @@ services:
   automation:
     build: .
     ports:
-      - "3000:3000"
-      - "3001:3001"
+      - "3000:3000" # Dashboard
+      - "3001:3001" # Trigger API
     env_file:
       - .env
     environment:
@@ -12,3 +12,4 @@ services:
     volumes:
       - ./playwright-report:/app/playwright-report
       - ./test-results:/app/test-results
+    restart: unless-stopped

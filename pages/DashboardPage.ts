@@ -105,7 +105,7 @@ export class DashboardPage {
      * Selects the "Create Shipment" option from the menu and waits for the form to load.
      */
     async selectCreateShipment() {
-        const visibleOption = this.createShipmentOption.filter({ visible: true });
+        const visibleOption = this.createShipmentOption.filter({ visible: true }).first();
         await visibleOption.hover();
 
         await Promise.all([

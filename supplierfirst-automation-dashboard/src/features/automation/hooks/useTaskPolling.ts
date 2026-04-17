@@ -1,16 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { taskApi } from '../services/taskApi';
 import { TaskData, LookupData } from '../types/automation.types';
-import { getFriendlyErrorMessage } from '../utils/errorUtils';
 
-
-
-export const useTaskPolling = (taskId: number) => {
+export const useTaskPolling = (taskId: number | null) => {
     const [task, setTask] = useState<TaskData | null>(null);
     const [lookupData, setLookupData] = useState<LookupData[]>([]);
     const [logs, setLogs] = useState<string[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+    const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
+
+    const taskRef = useRef<TaskData | null>(null);
+    useEffect(() => {
+        taskRef.current = task;
+    }, [task]);
 
     const fetchInitialData = useCallback(async () => {
         try {
@@ -24,20 +27,25 @@ export const useTaskPolling = (taskId: number) => {
     const isTerminalStatus = useCallback((status: any) => {
         if (!status || lookupData.length === 0) return false;
         const statusId = Number(status);
-        return lookupData.some(l => 
+        return lookupData.some(l =>
             ['completed', 'failed'].includes(String(l.value || l.name).toLowerCase()) && l.id === statusId
         );
     }, [lookupData]);
 
     const fetchTaskStatus = useCallback(async () => {
+        if (taskId === null) return null;
         try {
             const data = await taskApi.getTaskStatus(taskId);
             setTask(data);
-            setError(null);
             return data;
         } catch (err: any) {
-            const msg = getFriendlyErrorMessage(err);
-            setError(msg);
+            console.warn(`[useTaskPolling] Fetch failed for Task ${taskId}: ${err.message}`);
+
+            // Handle 404 specifically
+            if (err.response?.status === 404) {
+                setError(`Task #${taskId} not found on the server. Please check the ID or trigger a new task.`);
+            }
+
             throw err;
         } finally {
             setLoading(false);
@@ -48,46 +56,107 @@ export const useTaskPolling = (taskId: number) => {
         fetchInitialData();
     }, [fetchInitialData]);
 
+    // Reset state when taskId changes
     useEffect(() => {
-        // Only start polling if we have lookup data and it's not already terminal
-        if (lookupData.length === 0) return;
-        if (isTerminalStatus(task?.status)) return;
+        if (taskId === null) {
+            setTask(null);
+            setLogs([]);
+            setLoading(false);
+            setError(null);
+            return;
+        }
+        setTask(null);
+        setLogs([]);
+        setLoading(true);
+        setError(null);
+    }, [taskId]);
 
-        // Perform initial fetch
-        fetchTaskStatus().catch(() => {});
+    useEffect(() => {
+        // Log setup for debugging
+        console.log(`[useTaskPolling] Setting up polling for Task ${taskId}. Lookup count: ${lookupData.length}`);
+
+        if (taskId === null) return;
+
+        let consecutiveFailures = 0;
+
+        // Perform initial fetch immediately
+        fetchTaskStatus().catch(err => {
+            console.error('[useTaskPolling] Initial fetch failed:', err.message);
+            consecutiveFailures++;
+        });
 
         // Set up interval for subsequent fetches
         const interval = setInterval(async () => {
+            // Use ref to check current status without depending on 'task' state
+            const currentTask = taskRef.current;
+            if (currentTask && isTerminalStatus(currentTask.status)) {
+                console.log(`[useTaskPolling] Task ${taskId} is terminal. Stopping interval.`);
+                clearInterval(interval);
+                return;
+            }
+
             try {
+                if (taskId === null) return;
+                console.log(`[useTaskPolling] Polling Task ${taskId}...`);
                 const data = await fetchTaskStatus();
-                // Stop polling if we reached a terminal state
+
+                if (!data) return;
+
+                // Reset on success
+                consecutiveFailures = 0;
+                setError(null);
+                setIsReconnecting(false);
+
                 if (isTerminalStatus(data.status)) {
                     clearInterval(interval);
                 }
-            } catch (err) {
-                // Keep polling on transient errors, fetchTaskStatus handles error state
-            }
-        }, 5000);
 
-        return () => clearInterval(interval);
-        // Important: We do NOT depend on 'task' here to avoid restarting the interval on every update
-    }, [lookupData, taskId, isTerminalStatus, fetchTaskStatus]);
+                // Fetch logs
+                const logData = await taskApi.getTaskLogs(taskId);
+                setLogs(logData);
 
-    const submitOtp = async (otp: string) => {
-        try {
-            await taskApi.updateTaskOtp(taskId, otp, 'otp_provided');
-            // Optimistically update local state using the helper to get the ID
-            if (task) {
-                const statusId = taskApi.getStatusId('otp_provided');
-                if (statusId) {
-                    setTask({ ...task, status: statusId });
+                // --- Automated OTP Retrieval Consolidation ---
+                // The worker now polls the database directly for the OTP.
+                // This block has been removed to prevent duplicate submissions and keep the code clean.
+            } catch (err: any) {
+                consecutiveFailures++;
+                console.warn(`[useTaskPolling] Polling failure ${consecutiveFailures}`);
+
+                const currentTask = taskRef.current;
+                const statusId = currentTask ? Number(currentTask.status) : null;
+                const awaitingOtpId = taskApi.getStatusId('awaiting_otp');
+                const processingId = taskApi.getStatusId('processing');
+
+                // Critical state check: be more tolerant if we are in processing, awaiting_otp, 
+                // OR if we haven't successfully connected yet (task is null)
+                const isCriticalState = statusId === awaitingOtpId || statusId === processingId || currentTask === null;
+                const MAX_FAILURES = isCriticalState ? 30 : 5;
+
+                if (consecutiveFailures >= 2) {
+                    setIsReconnecting(true);
+                }
+
+                if (consecutiveFailures >= MAX_FAILURES) {
+                    // Only show "Connection Lost" if we don't have a terminal result already
+                    const isTaskFailed = currentTask && lookupData.some(l =>
+                        String(l.value || l.name).toLowerCase() === 'failed' && l.id === Number(currentTask.status)
+                    );
+
+                    if (!isTaskFailed) {
+                        console.error(`[useTaskPolling] Reached failure limit (${MAX_FAILURES}). Stopping polling.`);
+                        setError('Connection to automation server lost. Please check your network and refresh.');
+                        setIsReconnecting(false);
+                    }
+                    clearInterval(interval);
                 }
             }
-        } catch (err) {
-            setError(getFriendlyErrorMessage(err));
-            throw err;
-        }
-    };
+        }, Number(process.env.REACT_APP_POLL_INTERVAL || 5000));
 
-    return { task, lookupData, logs, loading, error, submitOtp };
+        return () => {
+            console.log(`[useTaskPolling] Cleaning up polling for Task ${taskId}`);
+            clearInterval(interval);
+        };
+    }, [taskId, fetchTaskStatus, isTerminalStatus, lookupData]);
+
+    return { task, lookupData, logs, loading, error, isReconnecting };
 };

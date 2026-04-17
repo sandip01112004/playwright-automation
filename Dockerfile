@@ -1,26 +1,56 @@
-# Use the official Playwright image as the base
+# ==================== Stage 1: Build React Dashboard ====================
+FROM node:20-slim AS dashboard-builder
+
+WORKDIR /app/dashboard
+
+# Accept BFC API URLs as build args so they're baked into the React bundle correctly
+# Values must be provided via .env and docker-compose build.args — no defaults here
+ARG REACT_APP_TRIGGER_API_URL
+ARG REACT_APP_biofuelcircle_API_BASE_URL
+
+ENV REACT_APP_TRIGGER_API_URL=$REACT_APP_TRIGGER_API_URL
+ENV REACT_APP_biofuelcircle_API_BASE_URL=$REACT_APP_biofuelcircle_API_BASE_URL
+
+COPY supplierfirst-automation-dashboard/package*.json ./
+RUN npm ci
+
+COPY supplierfirst-automation-dashboard/ ./
+RUN npm run build
+
+# ==================== Stage 2: Runtime ====================
 FROM mcr.microsoft.com/playwright:v1.58.2-jammy
+
 WORKDIR /app
 
-# 1. Install root dependencies (API & Automation)
+# Install root dependencies (API + Playwright)
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
-# 2. Install dashboard dependencies
-# Copy only package files first to optimize layer caching
-COPY supplierfirst-automation-dashboard/package*.json ./supplierfirst-automation-dashboard/
-RUN cd supplierfirst-automation-dashboard && npm install
+# Install serve to host the static React build
+RUN npm install -g serve
 
-# 3. Copy the rest of the application code
-COPY . .
+# Copy application source files
+COPY tsconfig.json ./
+COPY playwright.config.ts ./
+COPY trigger-api.ts ./
+COPY types/ ./types/
+COPY utils/ ./utils/
+COPY fixtures/ ./fixtures/
+COPY pages/ ./pages/
+COPY tests/ ./tests/
 
-# 4. Expose the dashboard (3000) and the API (3001)
+# Copy built React dashboard from Stage 1
+COPY --from=dashboard-builder /app/dashboard/build ./dashboard-build
+
 EXPOSE 3000 3001
 
-# 5. Set environment variables
 ENV HEADLESS=true
 ENV PORT=3001
-ENV REACT_APP_API_BASE_URL=http://localhost:3001/api/v1
 
-# 6. Start both processes concurrently
-CMD ["npm", "run", "start:all"]
+# Health check against the logs endpoint — returns 200 for any taskId, even unknown ones
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s \
+  CMD curl -sf http://localhost:3001/api/logs/healthcheck > /dev/null || exit 1
+
+CMD ["npx", "concurrently", \
+     "npx ts-node trigger-api.ts", \
+     "serve -s dashboard-build -l 3000 --no-clipboard"]

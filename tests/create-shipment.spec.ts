@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload }) => {
-    const taskId = payload.task_id || 1; // Default to task ID 1 as requested
+    const taskId = payload.task_id;
     console.log(`[Test] Starting Full Shipment Creation for Task ID: ${taskId}`);
     const automationService = new AutomationService(taskId);
 
@@ -64,7 +64,10 @@ test('Full Shipment Creation: API Data + UI Automation', async ({ page, payload 
             const invoiceUrl = payload.invoice.presigned_url;
             const invoiceNumber = payload.invoice.invoice_number;
             const invoiceAmount = payload.invoice.total_amount;
-            const invoiceDate = payload.invoice.created_at.split('T')[0];
+
+            // Safety guard for missing created_at date
+            const rawDate = payload.invoice.created_at || new Date().toISOString();
+            const invoiceDate = rawDate.split('T')[0];
 
             const deliveryUrl = deliveryMedia.presigned_url;
             const getFileNameWithExtension = (url: string, defaultExt: string = '.pdf') => {

@@ -43,9 +43,8 @@ export async function performFullLogin(page: Page, automationService: Automation
 
         // OTP Selection
         await expect(page).toHaveURL(/.*\/sendOTP/);
-        // Note: Specific channel selection may need to be dynamic in the future
-        // For now, we use the same logic as the original spec
-        await otpSelectionPage.selectChannel('Mobile: +91 94*****329');
+        // Note: Specific channel selection is now driven by .env
+        await otpSelectionPage.selectChannel(config.OTP_CHANNEL);
         await expect(page).toHaveURL(/.*\/verifyOTP;type=sms;screen=login/);
 
         // Awaiting User/System OTP

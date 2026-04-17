@@ -15,13 +15,13 @@ dotenv.config({ path: path.resolve(__dirname, '.env') });
 export default defineConfig({
   testDir: './tests',
   /* Maximum time one test can run for. */
-  timeout: 0,
+  timeout: 300000,
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
+  /* Retry 0 times to prevent redundant restarts of the automation worker */
+  retries: 0,
   /* Opt out of parallel tests on CI or local debugging. */
   workers: 1,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
@@ -34,7 +34,7 @@ export default defineConfig({
 
   use: {
     /* Base URL to use in actions like `await page.goto('')`. */
-    baseURL: 'https://supplierfirst.ril.com',
+    baseURL: process.env.BASE_URL || 'https://supplierfirst.ril.com',
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',

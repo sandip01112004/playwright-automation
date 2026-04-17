@@ -1,21 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface OtpInputScreenProps {
-    onSubmit: (otp: string) => Promise<void>;
+    defaultOtp?: string;
 }
 
-const OtpInputScreen: React.FC<OtpInputScreenProps> = ({ onSubmit }) => {
-    const [otp, setOtp] = useState('');
-    const [submitting, setSubmitting] = useState(false);
+const OtpInputScreen: React.FC<OtpInputScreenProps> = ({ defaultOtp = '' }) => {
+    const [otp, setOtp] = useState(defaultOtp);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (otp.length < 4) return;
-        setSubmitting(true);
-        try {
-            await onSubmit(otp);
-        } catch (err) {
-            setSubmitting(false);
+    useEffect(() => {
+        setOtp(defaultOtp || '');
+    }, [defaultOtp]);
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value.replace(/\D/g, ''); // Only digits
+        if (value.length <= 6) {
+            setOtp(value);
         }
     };
 
@@ -24,18 +23,22 @@ const OtpInputScreen: React.FC<OtpInputScreenProps> = ({ onSubmit }) => {
             <div className="status-badge await">Action Required</div>
             <h2>Enter OTP</h2>
             <p>Please enter the verification code sent from the supplierfirst portal.</p>
-            <form onSubmit={handleSubmit} className="otp-form">
+            <form className="otp-form" onSubmit={(e) => e.preventDefault()}>
                 <input
                     type="text"
                     placeholder="000000"
                     value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
+                    onChange={handleInputChange}
                     maxLength={6}
-                    disabled={submitting}
+                    disabled={true}
+                    autoFocus
                 />
-                <button type="submit" disabled={submitting || otp.length < 4}>
-                    {submitting ? 'Submitting...' : 'Verify OTP'}
-                </button>
+                {otp && (
+                    <div style={{ marginTop: '15px', color: '#60a5fa', fontSize: '0.9rem', fontWeight: 500 }}>
+                        <div className="pulse-dot tiny" style={{ display: 'inline-block', marginRight: '8px' }}></div>
+                        OTP received. Proceeding automatically...
+                    </div>
+                )}
             </form>
         </div>
     );

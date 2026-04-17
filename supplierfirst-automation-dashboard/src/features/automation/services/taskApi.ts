@@ -2,12 +2,16 @@ import axios from 'axios';
 import { TaskData, LookupData } from '../types/automation.types';
 
 // In Create React App, variables MUST start with REACT_APP_ to be visible in the browser
-const API_BASE_URL = (process.env.REACT_APP_biofuelcircle_API_BASE_URL || 'https://api-dev-next.biofuelcircle.com/api/v1').replace(/\/$/, '');
+const rawUrl = process.env.REACT_APP_TRIGGER_API_URL || '';
+const TRIGGER_API_URL = rawUrl.replace(/\/$/, '');
+const API_BASE_URL = `${TRIGGER_API_URL}/api/proxy`;
 const API_TOKEN = process.env.REACT_APP_biofuelcircle_API_TOKEN || '';
+const SECRET_KEY = process.env.REACT_APP_SCN_API_SECRET_KEY || '';
 
 const commonHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
 };
 
 const authHeaders = {
@@ -26,7 +30,7 @@ export const taskApi = {
         }
 
         const url = `${API_BASE_URL}/reference/lookupdata/?category=${category}`;
-        
+
         const fetchPromise = axios.get(url, { headers: commonHeaders })
             .then(response => {
                 const data = response.data.data?.data || response.data.data || response.data;
@@ -60,14 +64,39 @@ export const taskApi = {
             const response = await axios.get(url, {
                 headers: authHeaders,
             });
+
+            // Defensive: Check if we got an ngrok error page instead of JSON
+            if (typeof response.data === 'string' && response.data.includes('ngrok')) {
+                throw new Error('Ngrok Tunnel Error: The backend tunnel is inactive or the URL is invalid (ERR_NGROK_6024).');
+            }
+
             return response.data.data || response.data;
         } catch (error: any) {
+            if (error.message === 'Network Error') {
+                throw new Error('Network Error: The automation server is unreachable. This usually happens if the ngrok tunnel is down or your internet is unstable.');
+            }
             console.error(`[taskApi] getTaskStatus failed for ${url}:`, error.response?.status, error.response?.data || error.message);
             throw error;
         }
     },
 
-    updateTaskOtp: async (taskId: number, otp: string, statusKey: string = 'otp_provided'): Promise<TaskData> => {
+    /**
+     * Specifically fetch the OTP from the task object (or dedicated endpoint)
+     */
+    fetchAutomatedOtp: async (taskId: number): Promise<string | null> => {
+        const url = `${API_BASE_URL}/automation_task/${taskId}/`;
+        try {
+            const response = await axios.get(url, { headers: authHeaders });
+            const data = response.data.data || response.data;
+            return data.otp || null;
+        } catch (error) {
+            return null;
+        }
+    },
+
+
+
+    updateTaskStatus: async (taskId: number, statusKey: string): Promise<TaskData> => {
         const statusId = lookupCache[statusKey.toLowerCase()];
 
         if (!statusId) {
@@ -76,7 +105,6 @@ export const taskApi = {
         }
 
         const response = await axios.patch(`${API_BASE_URL}/automation_task/${taskId}/`, {
-            otp,
             status: statusId
         }, {
             headers: authHeaders,
@@ -92,17 +120,39 @@ export const taskApi = {
     },
 
     /**
+     * Discovery: Fetch the most recently triggered task from the Trigger API
+     */
+    getActiveTask: async (): Promise<{ taskId: string | null; status: string } | null> => {
+
+        try {
+            const response = await axios.get(`${TRIGGER_API_URL}/api/active-task`, {
+                headers: {
+                    ...commonHeaders,
+                    'x-api-key': SECRET_KEY
+                }
+            });
+            return response.data;
+        } catch (error) {
+            return null;
+        }
+    },
+
+    /**
      * Fetch real-time automation logs from the Trigger API
      */
     getTaskLogs: async (taskId: number): Promise<string[]> => {
-        // We assume the trigger API is reachable at this relative or absolute URL
-        // In local dev, it's typically http://localhost:3001
-        const TRIGGER_API_URL = process.env.REACT_APP_TRIGGER_API_URL || 'http://localhost:3001';
+
         try {
-            const response = await axios.get(`${TRIGGER_API_URL}/api/logs/${taskId}`);
+            const response = await axios.get(`${TRIGGER_API_URL}/api/logs/${taskId}`, {
+                headers: {
+                    ...commonHeaders,
+                    'x-api-key': SECRET_KEY
+                }
+            });
             return response.data.logs || [];
         } catch (error) {
             // Silently fail log fetching to avoid disrupting main status polling
+            console.warn('[taskApi] Log fetch failed. Check X-API-KEY or Trigger API status.');
             return [];
         }
     }
