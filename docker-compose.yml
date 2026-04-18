@@ -1,6 +1,11 @@
 services:
   automation:
-    build: .
+    build:
+      context: .
+      args:
+        - REACT_APP_biofuelcircle_API_TOKEN=${REACT_APP_biofuelcircle_API_TOKEN}
+        - REACT_APP_SCN_API_SECRET_KEY=${REACT_APP_SCN_API_SECRET_KEY}
+        - REACT_APP_biofuelcircle_API_BASE_URL=${REACT_APP_biofuelcircle_API_BASE_URL}
     ports:
       - "3000:3000" # Unified Port
     env_file:

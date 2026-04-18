@@ -4,11 +4,13 @@ FROM node:20-slim AS dashboard-builder
 WORKDIR /app/dashboard
 
 # Accept BFC API URLs as build args so they're baked into the React bundle correctly
-ARG REACT_APP_TRIGGER_API_URL
 ARG REACT_APP_biofuelcircle_API_BASE_URL
+ARG REACT_APP_biofuelcircle_API_TOKEN
+ARG REACT_APP_SCN_API_SECRET_KEY
 
-ENV REACT_APP_TRIGGER_API_URL=$REACT_APP_TRIGGER_API_URL
 ENV REACT_APP_biofuelcircle_API_BASE_URL=$REACT_APP_biofuelcircle_API_BASE_URL
+ENV REACT_APP_biofuelcircle_API_TOKEN=$REACT_APP_biofuelcircle_API_TOKEN
+ENV REACT_APP_SCN_API_SECRET_KEY=$REACT_APP_SCN_API_SECRET_KEY
 
 COPY supplierfirst-automation-dashboard/package*.json ./
 RUN npm install

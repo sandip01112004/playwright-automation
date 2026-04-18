@@ -106,7 +106,7 @@ app.all(/\/api\/proxy\/(.*)/, async (req: Request, res: Response) => {
                 'origin': bfcBaseUrl,
                 'referer': bfcBaseUrl,
                 'ngrok-skip-browser-warning': 'true',
-                'Authorization': req.headers['authorization'] || `Bearer ${config.BFC_API_TOKEN}`
+                'Authorization': `Bearer ${config.BFC_API_TOKEN}`
             },
             validateStatus: () => true, // Pass all status codes through
             responseType: 'json'
