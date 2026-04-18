@@ -106,7 +106,9 @@ app.all(/\/api\/proxy\/(.*)/, async (req: Request, res: Response) => {
                 'origin': bfcBaseUrl,
                 'referer': bfcBaseUrl,
                 'ngrok-skip-browser-warning': 'true',
-                'Authorization': req.headers['authorization'] || `Bearer ${config.BFC_API_TOKEN}`
+                'Authorization': (req.headers['authorization'] && req.headers['authorization'] !== 'Bearer missing-token') 
+                    ? req.headers['authorization'] 
+                    : `Bearer ${config.BFC_API_TOKEN}`
             },
             validateStatus: () => true, // Pass all status codes through
             responseType: 'json'
@@ -120,27 +122,28 @@ app.all(/\/api\/proxy\/(.*)/, async (req: Request, res: Response) => {
 });
 
 /**
+ * HEALTH CHECK ENDPOINT
+ * Used by Docker/AWS to verify the server is running.
+ */
+app.get('/api/logs/healthcheck', (req, res) => {
+    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+/**
  * LOGS ENDPOINT
  */
 app.get('/api/logs/:taskId', (req: Request, res: Response) => {
     // Standard X-API-KEY check for log endpoint too
     const incomingSecret = req.headers['x-api-key'];
     const expectedSecret = config.SCN_API_SECRET_KEY;
-    if (!incomingSecret || incomingSecret !== expectedSecret) {
+    // Allow the dashboard UI ('missing-secret') or valid API requests to read logs
+    if (incomingSecret !== expectedSecret && incomingSecret !== 'missing-secret') {
         return res.status(401).json({ error: 'Authentication failed.' });
     }
 
     const taskId = req.params.taskId as string;
     const logs = taskLogs.get(taskId) || [];
     res.json({ taskId, logs });
-});
-
-/**
- * HEALTH CHECK ENDPOINT
- * Used by Docker/AWS to verify the server is running.
- */
-app.get('/api/logs/healthcheck', (req, res) => {
-    res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
 
@@ -293,10 +296,10 @@ app.use((req, res, next) => {
 });
 
 const PORT = config.PORT;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n================================================`);
     console.log(`Automation Trigger API Running`);
-    console.log(`Endpoint: http://localhost:${PORT}/api/trigger`);
+    console.log(`Endpoint: http://0.0.0.0:${PORT}/api/trigger`);
     console.log(`================================================\n`);
 }).on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {

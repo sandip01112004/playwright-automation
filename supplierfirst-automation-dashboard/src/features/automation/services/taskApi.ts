@@ -12,8 +12,8 @@ const getRequiredEnv = (key: string, defaultValue: string = ''): string => {
 };
 
 // In Create React App, variables MUST start with REACT_APP_ to be visible in the browser
-// Default to the current origin if the API URL is missing (Standard for unified hosting)
-const TRIGGER_API_URL = getRequiredEnv('REACT_APP_TRIGGER_API_URL', window.location.origin).replace(/\/$/, '');
+// Rely on the current origin since the Dashboard and API are served from the same integrated Node.js server.
+const TRIGGER_API_URL = window.location.origin.replace(/\/$/, '');
 const API_BASE_URL = `${TRIGGER_API_URL}/api/proxy`;
 const API_TOKEN = getRequiredEnv('REACT_APP_biofuelcircle_API_TOKEN', 'missing-token');
 const SECRET_KEY = getRequiredEnv('REACT_APP_SCN_API_SECRET_KEY', 'missing-secret');
